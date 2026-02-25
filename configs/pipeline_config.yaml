@@ -1,0 +1,60 @@
+# =============================================================================
+# Pipeline Configuration — Scalable Log Anomaly Detection Platform
+# =============================================================================
+# This config drives the entire data pipeline: ingestion, validation,
+# preprocessing, and feature engineering.
+# Override any value via environment variables using the LADP_ prefix.
+# Example: LADP_PIPELINE__BATCH_SIZE=5000
+# =============================================================================
+
+pipeline:
+  batch_size: 10000
+  max_workers: 4
+  retry_attempts: 3
+  retry_delay_seconds: 5
+
+ingestion:
+  supported_formats:
+    - ".log"
+    - ".csv"
+    - ".json"
+  raw_data_dir: "data/raw"
+  processed_data_dir: "data/processed"
+  max_file_size_mb: 500
+  encoding: "utf-8"
+
+  # Log parsing patterns
+  log_patterns:
+    # Syslog format: Feb 22 10:30:15 server01 sshd[1234]: message
+    syslog: '(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+(?P<host>\S+)\s+(?P<service>\S+?)(?:\[(?P<pid>\d+)\])?:\s+(?P<message>.*)'
+    # Apache/Nginx access log
+    access_log: '(?P<ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+-\s+-\s+\[(?P<timestamp>[^\]]+)\]\s+"(?P<method>\w+)\s+(?P<path>\S+)\s+\S+"\s+(?P<status>\d{3})\s+(?P<bytes>\d+)'
+    # Generic application log: 2024-01-15 10:30:15 [ERROR] service: message
+    app_log: '(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+\[(?P<level>\w+)\]\s+(?:(?P<service>\S+?):\s+)?(?P<message>.*)'
+    # JSON structured log
+    json_log: null  # Parsed directly as JSON
+
+  ip_pattern: '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+
+validation:
+  required_fields:
+    - "timestamp"
+    - "message"
+  max_message_length: 10000
+  min_timestamp_year: 2020
+  max_null_ratio: 0.3
+
+preprocessing:
+  deduplication:
+    enabled: true
+    window_minutes: 5
+    fields: ["timestamp", "message", "source"]
+  normalization:
+    lowercase_messages: false
+    strip_ansi_codes: true
+    normalize_whitespace: true
+
+scheduling:
+  pipeline_interval_minutes: 15
+  retraining_interval_hours: 24
+  cleanup_interval_hours: 168  # 1 week

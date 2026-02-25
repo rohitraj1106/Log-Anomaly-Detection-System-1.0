@@ -1,0 +1,61 @@
+# =============================================================================
+# API Configuration — Scalable Log Anomaly Detection Platform
+# =============================================================================
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: false
+  cors_origins:
+    - "*"
+  rate_limit:
+    requests_per_minute: 1000
+    burst: 50
+  request_timeout_seconds: 30
+
+  model:
+    artifact_path: "models/artifacts"
+    preload_on_startup: true
+
+  endpoints:
+    predict_log: "/predict-log"
+    predict_batch: "/predict-batch"
+    health: "/health"
+    metrics: "/metrics"
+    model_info: "/model-info"
+
+streaming:
+  enabled: true
+  queue_max_size: 10000
+  batch_window_seconds: 5
+  producer:
+    log_rate_per_second: 100
+    source_services:
+      - "auth-service"
+      - "api-gateway"
+      - "payment-service"
+      - "user-service"
+      - "notification-service"
+      - "search-service"
+    anomaly_injection_rate: 0.05
+  consumer:
+    poll_interval_seconds: 1
+    batch_size: 100
+
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  collection_interval_seconds: 30
+  alert_thresholds:
+    anomaly_rate_warning: 0.1
+    anomaly_rate_critical: 0.25
+    latency_p99_ms: 500
+    error_rate: 0.05
+  drift_check_interval_minutes: 60
+
+dashboard:
+  host: "0.0.0.0"
+  port: 8501
+  refresh_interval_seconds: 10
+  max_display_records: 10000

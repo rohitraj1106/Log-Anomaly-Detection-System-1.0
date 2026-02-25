@@ -1,0 +1,113 @@
+# ==============================================================================
+# Docker Compose — Multi-Service Deployment
+# ==============================================================================
+# Separates API, Dashboard, Prometheus, and Grafana into independent services.
+# Usage: docker-compose up -d
+# ==============================================================================
+
+version: "3.9"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Training Pipeline (run once, then exit)
+  # ---------------------------------------------------------------------------
+  trainer:
+    build: .
+    container_name: ladp-trainer
+    command: python main.py --mode train --no-tune
+    volumes:
+      - model-artifacts:/app/models/artifacts
+      - ./data:/app/data
+    environment:
+      - LADP_ENV=production
+      - LADP_LOG_LEVEL=INFO
+    restart: "no"
+
+  # ---------------------------------------------------------------------------
+  # FastAPI Inference Server
+  # ---------------------------------------------------------------------------
+  api:
+    build: .
+    container_name: ladp-api
+    command: >
+      uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2 --access-log
+    ports:
+      - "8000:8000"
+    volumes:
+      - model-artifacts:/app/models/artifacts
+    environment:
+      - LADP_ENV=production
+      - LADP_LOG_LEVEL=INFO
+      - LADP_ALLOWED_ORIGINS=http://localhost:8501
+      - LADP_RATE_LIMIT=200/minute
+    depends_on:
+      trainer:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Streamlit Dashboard
+  # ---------------------------------------------------------------------------
+  dashboard:
+    build: .
+    container_name: ladp-dashboard
+    command: streamlit run dashboard/app.py --server.port 8501 --server.headless true
+    ports:
+      - "8501:8501"
+    volumes:
+      - model-artifacts:/app/models/artifacts
+    environment:
+      - LADP_API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Prometheus — Metrics Scraping
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: ladp-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Grafana — Dashboards & Alerting
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.2.2
+    container_name: ladp-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  model-artifacts:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

@@ -1,0 +1,29 @@
+# ==============================================================================
+# Render.com — Deployment Configuration
+# ==============================================================================
+# How it works:
+#   1. Push your code to GitHub
+#   2. Go to https://render.com → "New" → "Blueprint"
+#   3. Connect your GitHub repo
+#   4. Render reads this file and auto-deploys everything
+# ==============================================================================
+
+services:
+  - type: web
+    name: log-anomaly-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: LADP_ENV
+        value: production
+      - key: LADP_DEBUG
+        value: "false"
+      - key: LADP_LOG_LEVEL
+        value: INFO
+      - key: LADP_API_KEY
+        generateValue: true
+      - key: LADP_ALLOWED_ORIGINS
+        value: "*"

@@ -1,0 +1,171 @@
+# ==============================================================================
+# Scalable Log Anomaly Detection Platform — Project Configuration
+# ==============================================================================
+# Modern pyproject.toml replaces setup.py / setup.cfg / requirements.txt
+# for reproducible builds and unified tool configuration.
+# ==============================================================================
+
+[project]
+name = "log-anomaly-detection-platform"
+version = "1.0.0"
+description = "Production-grade ML system for detecting anomalies in large-scale distributed system logs"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "ML Engineering Team"},
+]
+keywords = ["anomaly-detection", "log-analysis", "machine-learning", "mlops"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    # Core ML & Data
+    "numpy>=1.24.0,<2.0.0",
+    "pandas>=2.0.0,<3.0.0",
+    "scipy>=1.10.0,<2.0.0",
+    "scikit-learn>=1.3.0,<2.0.0",
+    # API Serving
+    "fastapi>=0.100.0,<1.0.0",
+    "uvicorn[standard]>=0.23.0,<1.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "pydantic-settings>=2.0.0,<3.0.0",
+    # Configuration
+    "pyyaml>=6.0,<7.0",
+    # Dashboard & Visualization
+    "streamlit>=1.28.0",
+    "plotly>=5.15.0,<6.0.0",
+    # Monitoring
+    "prometheus-client>=0.19.0,<1.0.0",
+    # Security
+    "slowapi>=0.1.9,<1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.25.0",
+    "ruff>=0.1.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
+    "pandas-stubs>=2.0.0",
+]
+advanced = [
+    "mlflow>=2.7.0",
+    "tensorflow>=2.13.0",
+    "torch>=2.0.0",
+    "kafka-python>=2.0.2",
+    "feast>=0.34.0",
+]
+
+[project.urls]
+Repository = "https://github.com/your-org/log-anomaly-detection-platform"
+Documentation = "https://github.com/your-org/log-anomaly-detection-platform#readme"
+Issues = "https://github.com/your-org/log-anomaly-detection-platform/issues"
+
+# ==============================================================================
+# Ruff — Fast Python Linter & Formatter
+# ==============================================================================
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+fix = true
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "S",   # flake8-bandit (security)
+    "A",   # flake8-builtins
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific rules
+]
+ignore = [
+    "S101",  # allow assert in tests
+    "S301",  # allow pickle (needed for model serialization)
+    "S603",  # allow subprocess calls
+    "E501",  # line length handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S106"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["api", "models", "pipelines", "features", "streaming", "monitoring", "utils"]
+
+# ==============================================================================
+# MyPy — Static Type Checker
+# ==============================================================================
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+# ==============================================================================
+# Pytest — Testing Framework
+# ==============================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+python_classes = ["Test*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--cov=.",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-config=pyproject.toml",
+]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (slower, multi-component)",
+    "slow: Tests that take > 10s",
+]
+asyncio_mode = "auto"
+
+# ==============================================================================
+# Coverage — Code Coverage Configuration
+# ==============================================================================
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    ".venv/*",
+    "dashboard/*",
+    "htmlcov/*",
+    "experiments/runs/*",
+]
+
+[tool.coverage.report]
+fail_under = 60
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if __name__ == .__main__.",
+    "raise NotImplementedError",
+    "pass",
+    "except ImportError",
+]

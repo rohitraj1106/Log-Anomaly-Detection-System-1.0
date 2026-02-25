@@ -1,0 +1,90 @@
+# =============================================================================
+# Model Configuration — Scalable Log Anomaly Detection Platform
+# =============================================================================
+# Configure model selection, hyperparameters, training, and evaluation.
+# Switch between models by setting model.active_model.
+# =============================================================================
+
+model:
+  active_model: "isolation_forest"     # Options: isolation_forest, one_class_svm, autoencoder
+  artifacts_dir: "models/artifacts"
+  version_prefix: "v"
+
+  isolation_forest:
+    n_estimators: 200
+    contamination: 0.05               # Matches the ~5% anomaly rate in training data
+    max_samples: "auto"
+    max_features: 1.0
+    random_state: 42
+    n_jobs: -1
+    # Hyperparameter search space
+    tuning:
+      enabled: true
+      n_estimators_range: [100, 200, 300, 500]
+      contamination_range: [0.01, 0.02, 0.05, 0.1]
+      max_samples_range: [0.5, 0.75, 1.0, "auto"]
+      cv_folds: 5
+
+  one_class_svm:
+    kernel: "rbf"
+    gamma: "scale"
+    nu: 0.05
+    max_iter: -1
+    tuning:
+      enabled: true
+      kernel_options: ["rbf", "poly", "sigmoid"]
+      nu_range: [0.01, 0.05, 0.1, 0.2]
+      gamma_options: ["scale", "auto"]
+
+  autoencoder:
+    encoding_dim: 32
+    hidden_layers: [128, 64]
+    activation: "relu"
+    epochs: 50
+    batch_size: 256
+    learning_rate: 0.001
+    validation_split: 0.15
+    early_stopping_patience: 5
+    threshold_percentile: 95.0
+
+features:
+  tfidf:
+    max_features: 5000
+    ngram_range: [1, 3]
+    min_df: 2
+    max_df: 0.95
+    sublinear_tf: true
+
+  time_windows:
+    window_sizes_minutes: [1, 5, 15, 60]
+    aggregations: ["count", "mean", "std", "max"]
+
+  template:
+    max_templates: 500
+    similarity_threshold: 0.7
+
+  store:
+    path: "features/store"
+    format: "parquet"
+
+evaluation:
+  metrics:
+    - "precision"
+    - "recall"
+    - "f1_score"
+    - "roc_auc"
+  anomaly_threshold_percentile: 95
+  drift_detection:
+    enabled: true
+    window_size: 1000
+    threshold: 0.1
+    method: "ks_test"
+
+training:
+  test_size: 0.2
+  random_state: 42
+  stratify: true
+  cross_validation:
+    enabled: true
+    n_folds: 5
+    scoring: "f1"

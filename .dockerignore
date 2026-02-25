@@ -1,0 +1,72 @@
+# ==============================================================================
+# .dockerignore — Scalable Log Anomaly Detection Platform
+# ==============================================================================
+# Prevents secrets, dev artifacts, and unnecessary files from leaking
+# into the Docker image, reducing image size and attack surface.
+# ==============================================================================
+
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing & Coverage
+htmlcov/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# Data (use volumes for production data)
+data/raw/*.csv
+data/raw/*.log
+data/raw/*.json
+data/processed/*.csv
+
+# Experiment artifacts (mount separately)
+experiments/runs/
+experiments/evaluations/
+
+# Logs (use log drivers)
+logs/*.log
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+*.md
+!README.md
+LICENSE
+
+# CI/CD
+.github/
+.pre-commit-config.yaml
+
+# OS
+Thumbs.db
+.DS_Store
