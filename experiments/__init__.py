@@ -1,5 +1,5 @@
-"""Experiment tracking modules."""
+"""
+Experiment Module — ML Experiment Logging and Tracking.
+"""
 
-from experiments.tracker import ExperimentTracker
-
-__all__ = ["ExperimentTracker"]
+__all__ = []

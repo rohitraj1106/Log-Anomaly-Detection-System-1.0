@@ -196,7 +196,7 @@ python main.py --mode dashboard
 ### 5. Run Streaming Demo
 
 ```bash
-python main.py --mode stream
+python main.py --mode stream 
 ```
 
 ### CLI Options

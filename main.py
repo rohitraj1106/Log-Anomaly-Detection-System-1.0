@@ -39,6 +39,9 @@ PROJECT_ROOT = str(Path(__file__).resolve().parent)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+import mlflow
+import mlflow.sklearn
+from utils.settings import settings
 from utils.logger import get_logger
 from utils.helpers import ensure_directory, timer
 from pipelines.ingestion import LogIngestionEngine
@@ -49,7 +52,6 @@ from features.engineering import FeatureEngineer
 from features.store import FeatureStore
 from models.trainer import ModelTrainer
 from models.evaluator import ModelEvaluator
-from experiments.tracker import ExperimentTracker
 from monitoring.metrics import MetricsCollector
 
 logger = get_logger(__name__)
@@ -172,11 +174,6 @@ def step_feature_engineering(context: Dict[str, Any]) -> np.ndarray:
         extra_metadata={"num_records": len(df)},
     )
 
-    # Save the fitted feature engineer for inference
-    artifacts_dir = ensure_directory("models/artifacts/latest")
-    with open(artifacts_dir / "feature_engineer.pkl", "wb") as f:
-        pickle.dump(engineer, f)
-
     context["feature_matrix"] = feature_matrix
     context["feature_names"] = feature_names
     context["feature_engineer"] = engineer
@@ -199,8 +196,17 @@ def step_train(context: Dict[str, Any]) -> Dict[str, Any]:
 
     training_result = trainer.train(X, tune_hyperparams=tune)
 
-    # Save model
+    # Save model (this wipes and recreates models/artifacts/latest/)
     save_path = trainer.save_model()
+
+    # Save fitted feature engineer INTO the latest artifacts dir
+    # MUST be after save_model() which does shutil.rmtree on latest/
+    engineer = context.get("feature_engineer")
+    if engineer is not None:
+        fe_path = Path("models/artifacts/latest") / "feature_engineer.pkl"
+        with open(fe_path, "wb") as f:
+            pickle.dump(engineer, f)
+        logger.info(f"Feature engineer saved: {fe_path}")
 
     context["model_trainer"] = trainer
     context["training_result"] = training_result
@@ -256,44 +262,62 @@ def step_evaluate(context: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def step_experiment_tracking(context: Dict[str, Any]) -> Dict[str, Any]:
-    """Log the experiment run."""
-    tracker = ExperimentTracker("log_anomaly_detection")
+    """Log the experiment run using MLflow."""
+    logger.info("📡 Logging experiment to MLflow...")
+
+    # Configure MLflow
+    mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+    mlflow.set_experiment(settings.mlflow_experiment_name)
 
     training_result = context.get("training_result", {})
     eval_results = context.get("evaluation_results", {})
+    trainer = context.get("model_trainer")
+    engineer = context.get("feature_engineer")
 
-    run = tracker.start_run(
-        run_name=f"{training_result.get('model_name', 'model')}_{training_result.get('version', 'v0')}",
-        tags={"pipeline": "full", "model": training_result.get("model_name", "unknown")},
-    )
+    run_name = f"{training_result.get('model_name', 'model')}_{training_result.get('version', 'v0')}"
 
-    # Log parameters
-    run.log_params(training_result.get("params", {}))
-    run.log_param("training_samples", training_result.get("training_samples", 0))
-    run.log_param("feature_count", training_result.get("feature_count", 0))
+    with mlflow.start_run(run_name=run_name) as run:
+        # Log parameters
+        params = training_result.get("params", {})
+        mlflow.log_params(params)
+        mlflow.log_param("model_name", training_result.get("model_name"))
+        mlflow.log_param("version", training_result.get("version"))
+        mlflow.log_param("training_samples", training_result.get("training_samples", 0))
+        mlflow.log_param("feature_count", training_result.get("feature_count", 0))
 
-    # Log metrics
-    labeled = eval_results.get("labeled", {})
-    if labeled:
-        run.log_metrics({
-            "precision": labeled.get("precision", 0),
-            "recall": labeled.get("recall", 0),
-            "f1_score": labeled.get("f1_score", 0),
-            "roc_auc": labeled.get("roc_auc", 0) or 0,
-        })
+        # Log metrics
+        labeled = eval_results.get("labeled", {})
+        if labeled:
+            mlflow.log_metrics({
+                "precision": labeled.get("precision", 0),
+                "recall": labeled.get("recall", 0),
+                "f1_score": labeled.get("f1_score", 0),
+                "roc_auc": labeled.get("roc_auc", 0) if labeled.get("roc_auc") != "N/A" else 0,
+            })
 
-    # Log artifacts
-    model_path = context.get("model_save_path", "")
-    if model_path:
-        run.log_artifact(model_path)
+        # Log Unlabeled metrics
+        unlabeled = eval_results.get("unlabeled", {})
+        if unlabeled:
+            mlflow.log_metric("silhouette_score", unlabeled.get("silhouette_score", 0))
 
-    tracker.end_run("completed")
+        # Log model artifact with MLflow
+        if trainer and trainer.model:
+            logger.info("📦 Registering model in MLflow registry...")
+            mlflow.sklearn.log_model(
+                sk_model=trainer.model.model, # The actual sklearn model is inside the detector class
+                artifact_path="model",
+                registered_model_name=f"log_anomaly_{training_result.get('model_name')}",
+            )
 
-    # Print comparison
-    comparison = tracker.list_runs(sort_by="f1_score")
-    logger.info(f"Experiment logged. Total runs: {len(comparison)}")
+        # Log feature engineer as well
+        if engineer:
+            with open("temp_fe.pkl", "wb") as f:
+                pickle.dump(engineer, f)
+            mlflow.log_artifact("temp_fe.pkl", artifact_path="features")
+            os.remove("temp_fe.pkl")
 
-    return {"run_id": run.run_id, "run_name": run.run_name}
+    logger.info(f"Experiment logged to MLflow UI (ID: {run.info.run_id})")
+    return {"run_id": run.info.run_id, "run_name": run_name}
 
 
 # =============================================================================

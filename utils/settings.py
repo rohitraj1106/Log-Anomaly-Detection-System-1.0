@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     # --- Dashboard ---
     dashboard_port: int = Field(default=8501)
 
+    # --- MLOps ---
+    mlflow_tracking_uri: str = Field(default="sqlite:///mlflow.db", description="MLflow tracking URI")
+    mlflow_experiment_name: str = Field(default="log_anomaly_detection", description="MLflow experiment name")
+
     @field_validator("log_level")
     @classmethod
     def validate_log_level(cls, v: str) -> str:
