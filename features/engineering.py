@@ -14,17 +14,16 @@ NumPy arrays or sparse matrices that can be stacked.
 """
 
 import re
-from collections import Counter, defaultdict
-from typing import Any, Dict, List, Optional, Tuple, Union
+from collections import Counter
 
 import numpy as np
 import pandas as pd
 from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from utils.logger import get_logger
 from utils.config_loader import ConfigLoader
 from utils.helpers import timer
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -39,7 +38,12 @@ class LogTemplateExtractor:
     # Patterns for variable parts in log messages
     VARIABLE_PATTERNS = [
         (re.compile(r"\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b"), "<IP>"),
-        (re.compile(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"), "<UUID>"),
+        (
+            re.compile(
+                r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b"
+            ),
+            "<UUID>",
+        ),
         (re.compile(r"\b\d{10,13}\b"), "<TIMESTAMP>"),
         (re.compile(r"\b\d+\.\d+\b"), "<FLOAT>"),
         (re.compile(r"\b\d+\b"), "<NUM>"),
@@ -50,7 +54,7 @@ class LogTemplateExtractor:
 
     def __init__(self, max_templates: int = 500) -> None:
         self.max_templates = max_templates
-        self._template_cache: Dict[str, int] = {}
+        self._template_cache: dict[str, int] = {}
         self._template_counter: Counter = Counter()
 
     def extract_template(self, message: str) -> str:
@@ -105,15 +109,15 @@ class FeatureEngineer:
             self._max_templates = 500
 
         # Feature extractors
-        self._tfidf_vectorizer: Optional[TfidfVectorizer] = None
+        self._tfidf_vectorizer: TfidfVectorizer | None = None
         self._template_extractor = LogTemplateExtractor(max_templates=self._max_templates)
         self._is_fitted = False
-        self._feature_names: List[str] = []
+        self._feature_names: list[str] = []
 
         logger.info("FeatureEngineer initialized")
 
     @timer
-    def fit_transform(self, df: pd.DataFrame) -> Tuple[np.ndarray, List[str]]:
+    def fit_transform(self, df: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
         """
         Fit all feature extractors and transform the input DataFrame.
 
@@ -126,8 +130,8 @@ class FeatureEngineer:
         """
         logger.info(f"Feature engineering on {len(df)} records...")
 
-        features_list: List[Union[np.ndarray, sparse.spmatrix]] = []
-        feature_names: List[str] = []
+        features_list: list[np.ndarray | sparse.spmatrix] = []
+        feature_names: list[str] = []
 
         # 1. TF-IDF embeddings
         tfidf_features, tfidf_names = self._compute_tfidf(df, fit=True)
@@ -212,7 +216,7 @@ class FeatureEngineer:
 
     def _compute_tfidf(
         self, df: pd.DataFrame, fit: bool = True
-    ) -> Tuple[Union[np.ndarray, sparse.spmatrix], List[str]]:
+    ) -> tuple[np.ndarray | sparse.spmatrix, list[str]]:
         """Compute TF-IDF features from log messages."""
         messages = df["message"].astype(str).fillna("")
 
@@ -242,7 +246,7 @@ class FeatureEngineer:
 
     def _compute_template_features(
         self, df: pd.DataFrame, fit: bool = True
-    ) -> Tuple[np.ndarray, List[str]]:
+    ) -> tuple[np.ndarray, list[str]]:
         """Compute log template-based features."""
         messages = df["message"].astype(str).fillna("")
 
@@ -257,21 +261,19 @@ class FeatureEngineer:
         # Template rarity score (inverse frequency)
         template_counts = Counter(templates)
         total = len(templates)
-        rarity_scores = templates.map(
-            lambda t: 1.0 - (template_counts.get(t, 1) / total)
-        ).values
+        rarity_scores = templates.map(lambda t: 1.0 - (template_counts.get(t, 1) / total)).values
 
-        features = np.column_stack([
-            template_ids.reshape(-1, 1),
-            rarity_scores.reshape(-1, 1),
-        ])
+        features = np.column_stack(
+            [
+                template_ids.reshape(-1, 1),
+                rarity_scores.reshape(-1, 1),
+            ]
+        )
 
         feature_names = ["template_id", "template_rarity"]
         return features, feature_names
 
-    def _compute_statistical_features(
-        self, df: pd.DataFrame
-    ) -> Tuple[np.ndarray, List[str]]:
+    def _compute_statistical_features(self, df: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
         """Compute statistical/numeric features from log metadata."""
         features = []
         feature_names = []
@@ -325,24 +327,30 @@ class FeatureEngineer:
         feature_names.append("word_count")
 
         # Special character ratio
-        special_chars = df["message"].astype(str).apply(
-            lambda x: sum(1 for c in x if not c.isalnum() and not c.isspace()) / max(len(x), 1)
-        ).values
+        special_chars = (
+            df["message"]
+            .astype(str)
+            .apply(
+                lambda x: sum(1 for c in x if not c.isalnum() and not c.isspace()) / max(len(x), 1)
+            )
+            .values
+        )
         features.append(special_chars)
         feature_names.append("special_char_ratio")
 
         # Uppercase ratio
-        upper_ratio = df["message"].astype(str).apply(
-            lambda x: sum(1 for c in x if c.isupper()) / max(len(x), 1)
-        ).values
+        upper_ratio = (
+            df["message"]
+            .astype(str)
+            .apply(lambda x: sum(1 for c in x if c.isupper()) / max(len(x), 1))
+            .values
+        )
         features.append(upper_ratio)
         feature_names.append("uppercase_ratio")
 
         return np.column_stack(features), feature_names
 
-    def _compute_time_features(
-        self, df: pd.DataFrame
-    ) -> Tuple[np.ndarray, List[str]]:
+    def _compute_time_features(self, df: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
         """Compute time-window aggregation features."""
         features = []
         feature_names = []
@@ -375,9 +383,7 @@ class FeatureEngineer:
 
         return np.column_stack(features), feature_names
 
-    def _compute_frequency_features(
-        self, df: pd.DataFrame
-    ) -> Tuple[np.ndarray, List[str]]:
+    def _compute_frequency_features(self, df: pd.DataFrame) -> tuple[np.ndarray, list[str]]:
         """Compute frequency-based anomaly indicator features."""
         features = []
         feature_names = []
@@ -426,11 +432,11 @@ class FeatureEngineer:
         return np.column_stack(features), feature_names
 
     @property
-    def feature_names(self) -> List[str]:
+    def feature_names(self) -> list[str]:
         """Return the list of feature names from the last fit_transform."""
         return self._feature_names
 
     @property
-    def tfidf_vectorizer(self) -> Optional[TfidfVectorizer]:
+    def tfidf_vectorizer(self) -> TfidfVectorizer | None:
         """Return the fitted TF-IDF vectorizer."""
         return self._tfidf_vectorizer

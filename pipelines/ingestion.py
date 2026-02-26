@@ -20,19 +20,16 @@ Production Design:
 - Metrics tracking for ingestion throughput
 """
 
-import csv
-import io
 import json
 import re
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
-from utils.logger import get_logger
 from utils.config_loader import ConfigLoader
-from utils.helpers import compute_hash, parse_timestamp, timer
+from utils.helpers import compute_hash, timer
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -70,8 +67,15 @@ class LogIngestionEngine:
     IP_PATTERN = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
 
     SCHEMA = [
-        "timestamp", "level", "service", "source_ip",
-        "message", "raw_log", "log_hash", "parse_method", "is_anomaly",
+        "timestamp",
+        "level",
+        "service",
+        "source_ip",
+        "message",
+        "raw_log",
+        "log_hash",
+        "parse_method",
+        "is_anomaly",
     ]
 
     def __init__(self, config_path: str = "configs/pipeline_config.yaml") -> None:
@@ -135,7 +139,7 @@ class LogIngestionEngine:
         logger.info(f"Ingested {len(df)} records from text input (source={source})")
         return df
 
-    def ingest_dict(self, log_entry: Dict[str, Any]) -> pd.DataFrame:
+    def ingest_dict(self, log_entry: dict[str, Any]) -> pd.DataFrame:
         """Ingest a single structured log entry (for JSON API)."""
         record = self._normalize_dict_entry(log_entry)
         df = pd.DataFrame([record], columns=self.SCHEMA)
@@ -177,8 +181,8 @@ class LogIngestionEngine:
     def _ingest_jsonl(self, path: Path) -> pd.DataFrame:
         """Ingest from JSON Lines format."""
         records = []
-        with open(path, "r", encoding="utf-8") as f:
-            for line_num, line in enumerate(f, start=1):
+        with open(path, encoding="utf-8") as f:
+            for _line_num, line in enumerate(f, start=1):
                 line = line.strip()
                 if not line:
                     continue
@@ -199,7 +203,7 @@ class LogIngestionEngine:
     def _ingest_log(self, path: Path) -> pd.DataFrame:
         """Ingest from raw log files using regex parsing."""
         records = []
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -213,9 +217,7 @@ class LogIngestionEngine:
         logger.info(f"Log file ingestion complete: {len(result)} records from {path.name}")
         return result
 
-    def _parse_log_line(
-        self, line: str, source: str = "file"
-    ) -> Optional[Dict[str, str]]:
+    def _parse_log_line(self, line: str, source: str = "file") -> dict[str, str] | None:
         """
         Parse a single log line using the pattern registry.
 
@@ -251,7 +253,7 @@ class LogIngestionEngine:
             "is_anomaly": None,
         }
 
-    def _normalize_dict_entry(self, entry: Dict[str, Any]) -> Dict[str, str]:
+    def _normalize_dict_entry(self, entry: dict[str, Any]) -> dict[str, str]:
         """Normalize a dictionary log entry to standard schema."""
         raw = json.dumps(entry, default=str)
         return {
@@ -295,7 +297,7 @@ class LogIngestionEngine:
         return "INFO"
 
     @property
-    def stats(self) -> Dict[str, int]:
+    def stats(self) -> dict[str, int]:
         """Return ingestion statistics."""
         return {
             "total_ingested": self._ingestion_count,

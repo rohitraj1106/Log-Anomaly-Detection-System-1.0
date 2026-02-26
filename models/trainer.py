@@ -14,18 +14,18 @@ Supports: Isolation Forest, One-Class SVM, Autoencoder.
 import json
 import pickle
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
+from models.autoencoder import AutoencoderDetector
 from models.isolation_forest import IsolationForestDetector
 from models.one_class_svm import OneClassSVMDetector
-from models.autoencoder import AutoencoderDetector
-from utils.logger import get_logger
 from utils.config_loader import ConfigLoader
 from utils.helpers import ensure_directory, timer
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -58,9 +58,9 @@ class ModelTrainer:
             self._active_model_name = "isolation_forest"
             self._artifacts_dir = "models/artifacts"
 
-        self._model: Optional[Any] = None
-        self._model_version: Optional[str] = None
-        self._training_metadata: Dict[str, Any] = {}
+        self._model: Any | None = None
+        self._model_version: str | None = None
+        self._training_metadata: dict[str, Any] = {}
 
         ensure_directory(self._artifacts_dir)
         logger.info(f"ModelTrainer initialized (active: {self._active_model_name})")
@@ -69,10 +69,10 @@ class ModelTrainer:
     def train(
         self,
         X: np.ndarray,
-        model_name: Optional[str] = None,
+        model_name: str | None = None,
         tune_hyperparams: bool = False,
-        extra_params: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        extra_params: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Train the selected model.
 
@@ -88,9 +88,7 @@ class ModelTrainer:
         name = model_name or self._active_model_name
 
         if name not in MODEL_REGISTRY:
-            raise ValueError(
-                f"Unknown model: {name}. Available: {list(MODEL_REGISTRY.keys())}"
-            )
+            raise ValueError(f"Unknown model: {name}. Available: {list(MODEL_REGISTRY.keys())}")
 
         # Get model-specific config
         model_params = self._get_model_params(name)
@@ -113,7 +111,7 @@ class ModelTrainer:
         self._model.fit(X)
 
         # Generate version
-        self._model_version = datetime.now(timezone.utc).strftime("v%Y%m%d_%H%M%S")
+        self._model_version = datetime.now(UTC).strftime("v%Y%m%d_%H%M%S")
 
         # Store metadata
         self._training_metadata = {
@@ -123,7 +121,7 @@ class ModelTrainer:
             "feature_count": X.shape[1],
             "params": model_params,
             "tuning_results": tuning_results,
-            "trained_at": datetime.now(timezone.utc).isoformat(),
+            "trained_at": datetime.now(UTC).isoformat(),
         }
 
         logger.info(f"Training complete: {name} {self._model_version}")
@@ -145,7 +143,7 @@ class ModelTrainer:
         return self._model.predict_proba(X)
 
     @timer
-    def save_model(self, version: Optional[str] = None) -> str:
+    def save_model(self, version: str | None = None) -> str:
         """
         Save model artifacts to disk with versioning.
 
@@ -213,7 +211,7 @@ class ModelTrainer:
 
         metadata = {}
         if meta_path.exists():
-            with open(meta_path, "r") as f:
+            with open(meta_path) as f:
                 metadata = json.load(f)
 
         trainer = cls.__new__(cls)
@@ -224,12 +222,10 @@ class ModelTrainer:
         trainer._artifacts_dir = artifacts_dir
         trainer._config = None
 
-        logger.info(
-            f"Model loaded: {trainer._active_model_name} {trainer._model_version}"
-        )
+        logger.info(f"Model loaded: {trainer._active_model_name} {trainer._model_version}")
         return trainer
 
-    def list_versions(self) -> List[Dict[str, Any]]:
+    def list_versions(self) -> list[dict[str, Any]]:
         """List all saved model versions."""
         artifacts = Path(self._artifacts_dir)
         versions = []
@@ -239,17 +235,19 @@ class ModelTrainer:
                     meta_path = d / "metadata.json"
                     meta = {}
                     if meta_path.exists():
-                        with open(meta_path, "r") as f:
+                        with open(meta_path) as f:
                             meta = json.load(f)
-                    versions.append({
-                        "version": d.name,
-                        "model": meta.get("model_name", "unknown"),
-                        "trained_at": meta.get("trained_at", ""),
-                        "samples": meta.get("training_samples", 0),
-                    })
+                    versions.append(
+                        {
+                            "version": d.name,
+                            "model": meta.get("model_name", "unknown"),
+                            "trained_at": meta.get("trained_at", ""),
+                            "samples": meta.get("training_samples", 0),
+                        }
+                    )
         return versions
 
-    def _get_model_params(self, model_name: str) -> Dict[str, Any]:
+    def _get_model_params(self, model_name: str) -> dict[str, Any]:
         """Get model-specific parameters from config."""
         if self._config is None:
             return {}
@@ -268,9 +266,9 @@ class ModelTrainer:
         return self._model
 
     @property
-    def version(self) -> Optional[str]:
+    def version(self) -> str | None:
         return self._model_version
 
     @property
-    def metadata(self) -> Dict[str, Any]:
+    def metadata(self) -> dict[str, Any]:
         return self._training_metadata

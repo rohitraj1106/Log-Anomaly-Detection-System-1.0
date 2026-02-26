@@ -12,7 +12,6 @@ Usage:
 """
 
 from pathlib import Path
-from typing import List, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -30,12 +29,14 @@ class Settings(BaseSettings):
     )
 
     # --- Application ---
-    env: str = Field(default="development", description="Environment: development | staging | production")
+    env: str = Field(
+        default="development", description="Environment: development | staging | production"
+    )
     debug: bool = Field(default=True, description="Enable debug mode")
     log_level: str = Field(default="INFO", description="Logging level")
 
     # --- API Server ---
-    api_host: str = Field(default="0.0.0.0", description="API bind host")
+    api_host: str = Field(default="127.0.0.1", description="API bind host")
     api_port: int = Field(default=8000, description="API bind port")
     api_workers: int = Field(default=1, description="Uvicorn worker count")
     allowed_origins: str = Field(
@@ -44,7 +45,7 @@ class Settings(BaseSettings):
     )
 
     # --- Security ---
-    api_key: Optional[str] = Field(default=None, description="API key for authentication")
+    api_key: str | None = Field(default=None, description="API key for authentication")
     rate_limit: str = Field(default="100/minute", description="Rate limit per client IP")
 
     # --- Model ---
@@ -64,8 +65,12 @@ class Settings(BaseSettings):
     dashboard_port: int = Field(default=8501)
 
     # --- MLOps ---
-    mlflow_tracking_uri: str = Field(default="sqlite:///mlflow.db", description="MLflow tracking URI")
-    mlflow_experiment_name: str = Field(default="log_anomaly_detection", description="MLflow experiment name")
+    mlflow_tracking_uri: str = Field(
+        default="sqlite:///mlflow.db", description="MLflow tracking URI"
+    )
+    mlflow_experiment_name: str = Field(
+        default="log_anomaly_detection", description="MLflow experiment name"
+    )
 
     @field_validator("log_level")
     @classmethod
@@ -85,7 +90,7 @@ class Settings(BaseSettings):
         return v.lower()
 
     @property
-    def allowed_origins_list(self) -> List[str]:
+    def allowed_origins_list(self) -> list[str]:
         """Parse comma-separated origins into a list."""
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
 

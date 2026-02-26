@@ -4,9 +4,8 @@ Unit Tests — Data Preprocessing Pipeline.
 Tests deduplication, normalization, derived features, and edge cases.
 """
 
-import pytest
 import pandas as pd
-import numpy as np
+import pytest
 
 from pipelines.preprocessing import LogPreprocessor
 
@@ -34,10 +33,19 @@ class TestLogPreprocessor:
     @pytest.mark.unit
     def test_preprocess_handles_empty_df(self):
         """Preprocessing handles empty DataFrame gracefully."""
-        empty_df = pd.DataFrame(columns=[
-            "timestamp", "level", "service", "source_ip",
-            "message", "raw_log", "log_hash", "parse_method", "is_anomaly",
-        ])
+        empty_df = pd.DataFrame(
+            columns=[
+                "timestamp",
+                "level",
+                "service",
+                "source_ip",
+                "message",
+                "raw_log",
+                "log_hash",
+                "parse_method",
+                "is_anomaly",
+            ]
+        )
         result = self.preprocessor.preprocess(empty_df)
         assert isinstance(result, pd.DataFrame)
 

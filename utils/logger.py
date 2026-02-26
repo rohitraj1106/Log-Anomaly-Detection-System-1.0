@@ -14,15 +14,14 @@ Usage:
     logger.info("Processing batch", extra={"batch_size": 1000})
 """
 
+import json
 import logging
 import logging.handlers
-import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
-
+from typing import ClassVar
 
 LOG_DIR = Path(os.getenv("LOG_DIR", "logs"))
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -36,16 +35,36 @@ class StructuredFormatter(logging.Formatter):
     """JSON-structured log formatter for production observability."""
 
     # Standard LogRecord attributes to exclude from extra fields
-    _RESERVED = frozenset({
-        "name", "msg", "args", "levelname", "levelno", "pathname", "filename",
-        "module", "exc_info", "exc_text", "stack_info", "lineno", "funcName",
-        "created", "msecs", "relativeCreated", "thread", "threadName",
-        "processName", "process", "message", "taskName",
-    })
+    _RESERVED = frozenset(
+        {
+            "name",
+            "msg",
+            "args",
+            "levelname",
+            "levelno",
+            "pathname",
+            "filename",
+            "module",
+            "exc_info",
+            "exc_text",
+            "stack_info",
+            "lineno",
+            "funcName",
+            "created",
+            "msecs",
+            "relativeCreated",
+            "thread",
+            "threadName",
+            "processName",
+            "process",
+            "message",
+            "taskName",
+        }
+    )
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -56,9 +75,8 @@ class StructuredFormatter(logging.Formatter):
 
         # Dynamically add ALL extra fields (request_id, correlation_id, etc.)
         for key, value in record.__dict__.items():
-            if key not in self._RESERVED and not key.startswith("_"):
-                if key not in log_entry:
-                    log_entry[key] = value
+            if key not in self._RESERVED and not key.startswith("_") and key not in log_entry:
+                log_entry[key] = value
 
         # Add exception info if present
         if record.exc_info and record.exc_info[0] is not None:
@@ -74,12 +92,12 @@ class StructuredFormatter(logging.Formatter):
 class ConsoleFormatter(logging.Formatter):
     """Human-readable colored console formatter."""
 
-    COLORS = {
-        "DEBUG": "\033[36m",      # Cyan
-        "INFO": "\033[32m",       # Green
-        "WARNING": "\033[33m",    # Yellow
-        "ERROR": "\033[31m",      # Red
-        "CRITICAL": "\033[1;31m", # Bold Red
+    COLORS: ClassVar[dict[str, str]] = {
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
+        "CRITICAL": "\033[1;31m",  # Bold Red
     }
     RESET = "\033[0m"
 
@@ -99,9 +117,9 @@ class ConsoleFormatter(logging.Formatter):
 
 def get_logger(
     name: str,
-    level: Optional[str] = None,
+    level: str | None = None,
     log_to_file: bool = True,
-    log_file: Optional[str] = None,
+    log_file: str | None = None,
 ) -> logging.Logger:
     """
     Get a configured logger instance.

@@ -11,13 +11,12 @@ Implements:
 """
 
 import re
-from typing import Dict, List, Optional, Set
 
 import pandas as pd
 
-from utils.logger import get_logger
 from utils.config_loader import ConfigLoader
-from utils.helpers import compute_hash, timer
+from utils.helpers import timer
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -50,7 +49,7 @@ class LogPreprocessor:
             self._strip_ansi = True
             self._normalize_ws = True
 
-        self._seen_hashes: Set[str] = set()
+        self._seen_hashes: set[str] = set()
         self._dedup_count = 0
         logger.info("LogPreprocessor initialized")
 
@@ -97,8 +96,7 @@ class LogPreprocessor:
         df = self._add_derived_features(df)
 
         logger.info(
-            f"Preprocessing complete: {len(df)} records "
-            f"({self._dedup_count} duplicates removed)"
+            f"Preprocessing complete: {len(df)} records ({self._dedup_count} duplicates removed)"
         )
         return df.reset_index(drop=True)
 
@@ -127,9 +125,7 @@ class LogPreprocessor:
 
         # Strip ANSI codes
         if self._strip_ansi:
-            df["message"] = df["message"].astype(str).apply(
-                lambda x: ANSI_PATTERN.sub("", x)
-            )
+            df["message"] = df["message"].astype(str).apply(lambda x: ANSI_PATTERN.sub("", x))
 
         # Normalize whitespace
         if self._normalize_ws:
@@ -157,9 +153,9 @@ class LogPreprocessor:
 
         # Phase 2: Window-based dedup (exact same service + message)
         if "timestamp" in df.columns and "service" in df.columns:
-            df["_dedup_key"] = (
-                df["service"].astype(str) + "_" + df["message"].astype(str)
-            ).apply(lambda x: hash(x))
+            df["_dedup_key"] = (df["service"].astype(str) + "_" + df["message"].astype(str)).apply(
+                lambda x: hash(x)
+            )
             # Keep first occurrence within each dedup window
             df = df.drop_duplicates(subset=["_dedup_key"], keep="first")
             df = df.drop(columns=["_dedup_key"], errors="ignore")
@@ -191,8 +187,12 @@ class LogPreprocessor:
 
         # Log level numeric encoding
         level_map = {
-            "DEBUG": 0, "INFO": 1, "WARNING": 2, "WARN": 2,
-            "ERROR": 3, "CRITICAL": 4,
+            "DEBUG": 0,
+            "INFO": 1,
+            "WARNING": 2,
+            "WARN": 2,
+            "ERROR": 3,
+            "CRITICAL": 4,
         }
         if "level" in df.columns:
             df["level_numeric"] = (
@@ -208,13 +208,12 @@ class LogPreprocessor:
         # Has IP flag
         if "source_ip" in df.columns:
             df["has_ip"] = (
-                (df["source_ip"].astype(str).str.strip() != "")
-                & (df["source_ip"] != "0.0.0.0")
+                (df["source_ip"].astype(str).str.strip() != "") & (df["source_ip"] != "0.0.0.0")
             ).astype(int)
 
         return df
 
     @property
-    def stats(self) -> Dict[str, int]:
+    def stats(self) -> dict[str, int]:
         """Return preprocessing statistics."""
         return {"duplicates_removed": self._dedup_count}

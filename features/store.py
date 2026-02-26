@@ -11,16 +11,13 @@ In production, replace with Feast, Tecton, or a custom solution.
 """
 
 import json
-import shutil
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
-import pandas as pd
 
-from utils.logger import get_logger
 from utils.helpers import ensure_directory
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -42,10 +39,10 @@ class FeatureStore:
     def save_features(
         self,
         features: np.ndarray,
-        feature_names: List[str],
+        feature_names: list[str],
         dataset_name: str = "training",
-        version: Optional[str] = None,
-        extra_metadata: Optional[Dict[str, Any]] = None,
+        version: str | None = None,
+        extra_metadata: dict[str, Any] | None = None,
     ) -> str:
         """
         Save feature matrix with versioning.
@@ -61,7 +58,7 @@ class FeatureStore:
             Version string for retrieval.
         """
         if version is None:
-            version = datetime.now(timezone.utc).strftime("v_%Y%m%d_%H%M%S")
+            version = datetime.now(UTC).strftime("v_%Y%m%d_%H%M%S")
 
         version_dir = ensure_directory(self._store_path / dataset_name / version)
 
@@ -80,7 +77,7 @@ class FeatureStore:
             "version": version,
             "shape": list(features.shape),
             "num_features": len(feature_names),
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "features_path": str(features_path),
             "names_path": str(names_path),
         }
@@ -100,8 +97,8 @@ class FeatureStore:
     def load_features(
         self,
         dataset_name: str = "training",
-        version: Optional[str] = None,
-    ) -> Tuple[np.ndarray, List[str]]:
+        version: str | None = None,
+    ) -> tuple[np.ndarray, list[str]]:
         """
         Load feature matrix by dataset name and version.
 
@@ -124,27 +121,29 @@ class FeatureStore:
         entry = self._metadata[key]
 
         features = np.load(entry["features_path"], allow_pickle=False)
-        with open(entry["names_path"], "r") as f:
+        with open(entry["names_path"]) as f:
             feature_names = json.load(f)
 
         logger.info(f"Features loaded: {key} ({features.shape})")
         return features, feature_names
 
-    def list_versions(self, dataset_name: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_versions(self, dataset_name: str | None = None) -> list[dict[str, Any]]:
         """List all stored feature versions."""
         versions = []
         for key, entry in self._metadata.items():
             if dataset_name is None or entry.get("dataset") == dataset_name:
-                versions.append({
-                    "key": key,
-                    "dataset": entry.get("dataset"),
-                    "version": entry.get("version"),
-                    "shape": entry.get("shape"),
-                    "created_at": entry.get("created_at"),
-                })
+                versions.append(
+                    {
+                        "key": key,
+                        "dataset": entry.get("dataset"),
+                        "version": entry.get("version"),
+                        "shape": entry.get("shape"),
+                        "created_at": entry.get("created_at"),
+                    }
+                )
         return sorted(versions, key=lambda x: x.get("created_at", ""), reverse=True)
 
-    def _get_latest_version(self, dataset_name: str) -> Optional[str]:
+    def _get_latest_version(self, dataset_name: str) -> str | None:
         """Get the latest version for a dataset."""
         versions = [
             entry["version"]
@@ -155,10 +154,10 @@ class FeatureStore:
             return None
         return sorted(versions)[-1]
 
-    def _load_metadata(self) -> Dict[str, Any]:
+    def _load_metadata(self) -> dict[str, Any]:
         """Load metadata from disk."""
         if self._metadata_path.exists():
-            with open(self._metadata_path, "r") as f:
+            with open(self._metadata_path) as f:
                 return json.load(f)
         return {}
 

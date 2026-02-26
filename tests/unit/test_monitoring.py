@@ -4,8 +4,8 @@ Unit Tests — Monitoring Metrics Collector.
 Tests metrics recording, alerting, drift detection, and Prometheus export.
 """
 
-import pytest
 import numpy as np
+import pytest
 
 from monitoring.metrics import MetricsCollector
 
@@ -27,9 +27,7 @@ class TestMetricsCollector:
     @pytest.mark.unit
     def test_record_prediction(self):
         """Recording a prediction increments the counter."""
-        self.collector.record_prediction(
-            anomaly_score=0.3, is_anomaly=False, latency_ms=10.5
-        )
+        self.collector.record_prediction(anomaly_score=0.3, is_anomaly=False, latency_ms=10.5)
         metrics = self.collector.get_metrics()
         assert metrics["predictions"]["total"] == 1
         assert metrics["anomalies"]["total"] == 0
@@ -37,9 +35,7 @@ class TestMetricsCollector:
     @pytest.mark.unit
     def test_record_anomaly(self):
         """Recording an anomalous prediction increments both counters."""
-        self.collector.record_prediction(
-            anomaly_score=0.9, is_anomaly=True, latency_ms=15.0
-        )
+        self.collector.record_prediction(anomaly_score=0.9, is_anomaly=True, latency_ms=15.0)
         metrics = self.collector.get_metrics()
         assert metrics["predictions"]["total"] == 1
         assert metrics["anomalies"]["total"] == 1

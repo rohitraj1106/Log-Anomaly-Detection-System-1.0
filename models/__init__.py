@@ -1,6 +1,6 @@
 """Model modules for the Log Anomaly Detection Platform."""
 
-from models.trainer import ModelTrainer
 from models.evaluator import ModelEvaluator
+from models.trainer import ModelTrainer
 
-__all__ = ["ModelTrainer", "ModelEvaluator"]
+__all__ = ["ModelEvaluator", "ModelTrainer"]

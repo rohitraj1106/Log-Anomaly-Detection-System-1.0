@@ -12,16 +12,15 @@ Provides interactive dashboards showing:
 Run: streamlit run dashboard/app.py
 """
 
-import sys
 import json
+import sys
+from datetime import datetime
 from pathlib import Path
-from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
 
 # Add project root to path
@@ -42,7 +41,8 @@ st.set_page_config(
 # =============================================================================
 # Custom CSS
 # =============================================================================
-st.markdown("""
+st.markdown(
+    """
 <style>
     .main-header {
         font-size: 2.5rem;
@@ -63,7 +63,9 @@ st.markdown("""
     .status-healthy { color: #00C851; }
     .stMetric label { font-size: 0.9rem !important; }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 
 # =============================================================================
@@ -90,7 +92,7 @@ def load_evaluation_report() -> dict:
         reports = list(eval_dir.glob("*.json"))
         if reports:
             latest = sorted(reports)[-1]
-            with open(latest, "r") as f:
+            with open(latest) as f:
                 return json.load(f)
     return {}
 
@@ -103,7 +105,7 @@ def load_monitoring_metrics() -> dict:
         files = list(metrics_dir.glob("*.json"))
         if files:
             latest = sorted(files)[-1]
-            with open(latest, "r") as f:
+            with open(latest) as f:
                 return json.load(f)
     return {}
 
@@ -112,13 +114,17 @@ def _generate_demo_data() -> pd.DataFrame:
     """Generate demo data for dashboard preview."""
     np.random.seed(42)
     n = 5000
-    services = ["auth-service", "api-gateway", "payment-service",
-                 "user-service", "notification-service", "search-service"]
+    services = [
+        "auth-service",
+        "api-gateway",
+        "payment-service",
+        "user-service",
+        "notification-service",
+        "search-service",
+    ]
     levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-    timestamps = pd.date_range(
-        end=datetime.now(), periods=n, freq="1min"
-    )
+    timestamps = pd.date_range(end=datetime.now(), periods=n, freq="1min")
 
     data = {
         "timestamp": timestamps,
@@ -163,15 +169,14 @@ if "timestamp" in df.columns and not df["timestamp"].isna().all():
             max_value=max_date.date(),
         )
         if isinstance(date_range, tuple) and len(date_range) == 2:
-            mask = (
-                (df["timestamp"].dt.date >= date_range[0])
-                & (df["timestamp"].dt.date <= date_range[1])
+            mask = (df["timestamp"].dt.date >= date_range[0]) & (
+                df["timestamp"].dt.date <= date_range[1]
             )
             df = df[mask]
 
 # Service filter
 if "service" in df.columns:
-    services = ["All"] + sorted(df["service"].unique().tolist())
+    services = ["All", *sorted(df["service"].unique().tolist())]
     selected_service = st.sidebar.selectbox("Service", services)
     if selected_service != "All":
         df = df[df["service"] == selected_service]
@@ -181,7 +186,9 @@ if "service" in df.columns:
 # Page: Overview
 # =============================================================================
 if page == "📊 Overview":
-    st.markdown('<div class="main-header">Log Anomaly Detection Platform</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="main-header">Log Anomaly Detection Platform</div>', unsafe_allow_html=True
+    )
     st.markdown("Real-time monitoring and anomaly detection for distributed system logs.")
 
     # Key Metrics Row
@@ -211,7 +218,9 @@ if page == "📊 Overview":
             hourly.columns = ["timestamp", "count"]
 
             fig = px.area(
-                hourly, x="timestamp", y="count",
+                hourly,
+                x="timestamp",
+                y="count",
                 color_discrete_sequence=["#667eea"],
                 labels={"count": "Log Count", "timestamp": "Time"},
             )
@@ -228,8 +237,10 @@ if page == "📊 Overview":
         if "level" in df.columns:
             level_counts = df["level"].value_counts()
             colors = {
-                "DEBUG": "#36a2eb", "INFO": "#4bc0c0",
-                "WARNING": "#ffce56", "ERROR": "#ff6384",
+                "DEBUG": "#36a2eb",
+                "INFO": "#4bc0c0",
+                "WARNING": "#ffce56",
+                "ERROR": "#ff6384",
                 "CRITICAL": "#ff0000",
             }
             fig = px.pie(
@@ -253,7 +264,9 @@ if page == "📊 Overview":
     if "is_anomaly" in df.columns:
         anomalies = df[df["is_anomaly"] == 1].tail(10).sort_values("timestamp", ascending=False)
         if not anomalies.empty:
-            display_cols = [c for c in ["timestamp", "level", "service", "message"] if c in anomalies.columns]
+            display_cols = [
+                c for c in ["timestamp", "level", "service", "message"] if c in anomalies.columns
+            ]
             st.dataframe(anomalies[display_cols], use_container_width=True, height=300)
         else:
             st.info("No anomalies detected in the selected range.")
@@ -268,22 +281,34 @@ elif page == "🔴 Anomaly Analysis":
     if "is_anomaly" in df.columns and "timestamp" in df.columns:
         # Anomaly timeline
         st.subheader("Anomaly Spikes Over Time")
-        anomaly_ts = df[df["is_anomaly"] == 1].set_index("timestamp").resample("1h").size().reset_index()
+        anomaly_ts = (
+            df[df["is_anomaly"] == 1].set_index("timestamp").resample("1h").size().reset_index()
+        )
         anomaly_ts.columns = ["timestamp", "anomaly_count"]
-        normal_ts = df[df["is_anomaly"] == 0].set_index("timestamp").resample("1h").size().reset_index()
+        normal_ts = (
+            df[df["is_anomaly"] == 0].set_index("timestamp").resample("1h").size().reset_index()
+        )
         normal_ts.columns = ["timestamp", "normal_count"]
 
         fig = go.Figure()
-        fig.add_trace(go.Scatter(
-            x=normal_ts["timestamp"], y=normal_ts["normal_count"],
-            name="Normal", fill="tozeroy",
-            line=dict(color="#4bc0c0"),
-        ))
-        fig.add_trace(go.Scatter(
-            x=anomaly_ts["timestamp"], y=anomaly_ts["anomaly_count"],
-            name="Anomaly", fill="tozeroy",
-            line=dict(color="#ff6384"),
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=normal_ts["timestamp"],
+                y=normal_ts["normal_count"],
+                name="Normal",
+                fill="tozeroy",
+                line={"color": "#4bc0c0"},
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=anomaly_ts["timestamp"],
+                y=anomaly_ts["anomaly_count"],
+                name="Anomaly",
+                fill="tozeroy",
+                line={"color": "#ff6384"},
+            )
+        )
         fig.update_layout(
             title="Normal vs Anomalous Log Volume",
             plot_bgcolor="rgba(0,0,0,0)",
@@ -323,8 +348,10 @@ elif page == "🔴 Anomaly Analysis":
                     y=level_anomalies.values,
                     color=level_anomalies.index,
                     color_discrete_map={
-                        "DEBUG": "#36a2eb", "INFO": "#4bc0c0",
-                        "WARNING": "#ffce56", "ERROR": "#ff6384",
+                        "DEBUG": "#36a2eb",
+                        "INFO": "#4bc0c0",
+                        "WARNING": "#ffce56",
+                        "ERROR": "#ff6384",
                         "CRITICAL": "#ff0000",
                     },
                     labels={"x": "Level", "y": "Count"},
@@ -342,7 +369,7 @@ elif page == "🔴 Anomaly Analysis":
         if "message" in df.columns:
             anomalous_msgs = df[df["is_anomaly"] == 1]["message"].value_counts().head(15)
             for i, (msg, count) in enumerate(anomalous_msgs.items()):
-                st.markdown(f"**{i+1}.** `{str(msg)[:120]}` — **{count}** occurrences")
+                st.markdown(f"**{i + 1}.** `{str(msg)[:120]}` — **{count}** occurrences")
     else:
         st.info("No anomaly labels available. Run the training pipeline first.")
 
@@ -361,7 +388,9 @@ elif page == "🏗️ Service Health":
         for i, service in enumerate(sorted(services)):
             service_df = df[df["service"] == service]
             total = len(service_df)
-            anomalies = int(service_df["is_anomaly"].sum()) if "is_anomaly" in service_df.columns else 0
+            anomalies = (
+                int(service_df["is_anomaly"].sum()) if "is_anomaly" in service_df.columns else 0
+            )
             rate = anomalies / max(total, 1)
 
             health = "🟢" if rate < 0.05 else "🟡" if rate < 0.15 else "🔴"
@@ -375,15 +404,20 @@ elif page == "🏗️ Service Health":
         st.markdown("---")
         st.subheader("Service-wise Anomaly Rate Comparison")
         if "is_anomaly" in df.columns:
-            service_stats = df.groupby("service").agg(
-                total=("is_anomaly", "count"),
-                anomalies=("is_anomaly", "sum"),
-            ).reset_index()
+            service_stats = (
+                df.groupby("service")
+                .agg(
+                    total=("is_anomaly", "count"),
+                    anomalies=("is_anomaly", "sum"),
+                )
+                .reset_index()
+            )
             service_stats["anomaly_rate"] = service_stats["anomalies"] / service_stats["total"]
 
             fig = px.bar(
                 service_stats.sort_values("anomaly_rate", ascending=False),
-                x="service", y="anomaly_rate",
+                x="service",
+                y="anomaly_rate",
                 color="anomaly_rate",
                 color_continuous_scale="RdYlGn_r",
                 labels={"anomaly_rate": "Anomaly Rate", "service": "Service"},
@@ -417,13 +451,15 @@ elif page == "📈 Model Performance":
         cm = report.get("confusion_matrix", {})
         if cm:
             st.subheader("Confusion Matrix")
-            cm_array = np.array([
-                [cm.get("true_negatives", 0), cm.get("false_positives", 0)],
-                [cm.get("false_negatives", 0), cm.get("true_positives", 0)],
-            ])
+            cm_array = np.array(
+                [
+                    [cm.get("true_negatives", 0), cm.get("false_positives", 0)],
+                    [cm.get("false_negatives", 0), cm.get("true_positives", 0)],
+                ]
+            )
             fig = px.imshow(
                 cm_array,
-                labels=dict(x="Predicted", y="Actual", color="Count"),
+                labels={"x": "Predicted", "y": "Actual", "color": "Count"},
                 x=["Normal", "Anomaly"],
                 y=["Normal", "Anomaly"],
                 text_auto=True,
@@ -436,11 +472,13 @@ elif page == "📈 Model Performance":
         if "score_distribution" in report:
             st.subheader("Anomaly Score Distribution")
             dist = report["score_distribution"]
-            fig = go.Figure(go.Bar(
-                x=dist["bin_edges"][:-1],
-                y=dist["counts"],
-                marker_color="#667eea",
-            ))
+            fig = go.Figure(
+                go.Bar(
+                    x=dist["bin_edges"][:-1],
+                    y=dist["counts"],
+                    marker_color="#667eea",
+                )
+            )
             fig.update_layout(
                 xaxis_title="Anomaly Score",
                 yaxis_title="Count",
@@ -494,7 +532,9 @@ elif page == "⚡ Real-Time Monitor":
             ],
         }
         fig = px.bar(
-            latency_data, x="Percentile", y="Latency (ms)",
+            latency_data,
+            x="Percentile",
+            y="Latency (ms)",
             color="Latency (ms)",
             color_continuous_scale="Viridis",
         )
@@ -522,6 +562,5 @@ elif page == "⚡ Real-Time Monitor":
 # =============================================================================
 st.sidebar.markdown("---")
 st.sidebar.markdown(
-    "**Log Anomaly Detection Platform** v1.0  \n"
-    "Built with ❤️ for FAANG-level ML Engineering"
+    "**Log Anomaly Detection Platform** v1.0  \nBuilt with ❤️ for FAANG-level ML Engineering"
 )

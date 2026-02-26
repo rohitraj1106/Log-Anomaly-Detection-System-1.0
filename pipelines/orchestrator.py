@@ -13,15 +13,15 @@ In production, replace with Airflow, Prefect, or Dagster.
 """
 
 import time
-import traceback
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any
 
-from utils.logger import get_logger
 from utils.helpers import timer
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -38,24 +38,26 @@ class TaskStatus(Enum):
 @dataclass
 class TaskResult:
     """Result of a task execution."""
+
     status: TaskStatus
     output: Any = None
-    error: Optional[str] = None
+    error: str | None = None
     duration_ms: float = 0.0
     retries: int = 0
-    started_at: Optional[str] = None
-    completed_at: Optional[str] = None
+    started_at: str | None = None
+    completed_at: str | None = None
 
 
 @dataclass
 class PipelineTask:
     """A single task in the pipeline DAG."""
+
     name: str
     callable: Callable
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     retry_count: int = 3
     retry_delay: float = 1.0
-    timeout: Optional[float] = None
+    timeout: float | None = None
     description: str = ""
 
 
@@ -76,17 +78,17 @@ class PipelineOrchestrator:
 
     def __init__(self, pipeline_name: str) -> None:
         self.pipeline_name = pipeline_name
-        self._tasks: Dict[str, PipelineTask] = {}
-        self._results: Dict[str, TaskResult] = {}
-        self._execution_order: List[str] = []
-        self._context: Dict[str, Any] = {}
+        self._tasks: dict[str, PipelineTask] = {}
+        self._results: dict[str, TaskResult] = {}
+        self._execution_order: list[str] = []
+        self._context: dict[str, Any] = {}
         logger.info(f"Pipeline '{pipeline_name}' initialized")
 
     def add_task(
         self,
         name: str,
         callable: Callable,
-        depends_on: Optional[List[str]] = None,
+        depends_on: list[str] | None = None,
         retry_count: int = 3,
         retry_delay: float = 1.0,
         description: str = "",
@@ -104,7 +106,7 @@ class PipelineOrchestrator:
         return self  # Enable chaining
 
     @timer
-    def run(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, TaskResult]:
+    def run(self, context: dict[str, Any] | None = None) -> dict[str, TaskResult]:
         """
         Execute the pipeline DAG.
 
@@ -137,9 +139,7 @@ class PipelineOrchestrator:
             )
 
             if not deps_ok:
-                logger.warning(
-                    f"Skipping task '{task_name}' — dependency failure"
-                )
+                logger.warning(f"Skipping task '{task_name}' — dependency failure")
                 self._results[task_name] = TaskResult(
                     status=TaskStatus.SKIPPED,
                     error="Dependency failure",
@@ -150,9 +150,7 @@ class PipelineOrchestrator:
             self._results[task_name] = self._execute_task(task)
 
         pipeline_duration = (time.perf_counter() - pipeline_start) * 1000
-        success_count = sum(
-            1 for r in self._results.values() if r.status == TaskStatus.SUCCESS
-        )
+        success_count = sum(1 for r in self._results.values() if r.status == TaskStatus.SUCCESS)
         logger.info(
             f"Pipeline '{self.pipeline_name}' complete: "
             f"{success_count}/{len(self._results)} tasks succeeded "
@@ -165,7 +163,7 @@ class PipelineOrchestrator:
         """Execute a single task with retry logic."""
         for attempt in range(task.retry_count + 1):
             start = time.perf_counter()
-            started_at = datetime.now(timezone.utc).isoformat()
+            started_at = datetime.now(UTC).isoformat()
 
             try:
                 logger.info(
@@ -184,16 +182,14 @@ class PipelineOrchestrator:
                     duration_ms=duration,
                     retries=attempt,
                     started_at=started_at,
-                    completed_at=datetime.now(timezone.utc).isoformat(),
+                    completed_at=datetime.now(UTC).isoformat(),
                 )
 
             except Exception as e:
                 duration = (time.perf_counter() - start) * 1000
-                logger.error(
-                    f"Task '{task.name}' failed (attempt {attempt + 1}): {e}"
-                )
+                logger.error(f"Task '{task.name}' failed (attempt {attempt + 1}): {e}")
                 if attempt < task.retry_count:
-                    delay = task.retry_delay * (2 ** attempt)  # Exponential backoff
+                    delay = task.retry_delay * (2**attempt)  # Exponential backoff
                     logger.info(f"Retrying '{task.name}' in {delay:.1f}s...")
                     time.sleep(delay)
                 else:
@@ -203,16 +199,16 @@ class PipelineOrchestrator:
                         duration_ms=duration,
                         retries=attempt,
                         started_at=started_at,
-                        completed_at=datetime.now(timezone.utc).isoformat(),
+                        completed_at=datetime.now(UTC).isoformat(),
                     )
 
         # Should not reach here, but just in case
         return TaskResult(status=TaskStatus.FAILED, error="Unknown error")
 
-    def _topological_sort(self) -> List[str]:
+    def _topological_sort(self) -> list[str]:
         """Topological sort of tasks based on dependencies."""
-        in_degree: Dict[str, int] = defaultdict(int)
-        graph: Dict[str, List[str]] = defaultdict(list)
+        in_degree: dict[str, int] = defaultdict(int)
+        graph: dict[str, list[str]] = defaultdict(list)
 
         for name, task in self._tasks.items():
             in_degree.setdefault(name, 0)
@@ -222,7 +218,7 @@ class PipelineOrchestrator:
 
         # Start with tasks that have no dependencies
         queue = [n for n, d in in_degree.items() if d == 0]
-        result: List[str] = []
+        result: list[str] = []
 
         while queue:
             # Sort for deterministic order
@@ -235,13 +231,11 @@ class PipelineOrchestrator:
                     queue.append(neighbor)
 
         if len(result) != len(self._tasks):
-            raise ValueError(
-                f"Circular dependency detected in pipeline '{self.pipeline_name}'"
-            )
+            raise ValueError(f"Circular dependency detected in pipeline '{self.pipeline_name}'")
 
         return result
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get execution summary."""
         return {
             "pipeline": self.pipeline_name,

@@ -7,15 +7,15 @@ Alternative model for comparison:
 - Better for smaller, denser feature sets
 """
 
+from typing import Any
+
 import numpy as np
-from typing import Any, Dict, List, Optional
-
-from sklearn.svm import OneClassSVM
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import ParameterGrid
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import OneClassSVM
 
-from utils.logger import get_logger
 from utils.helpers import timer
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -41,7 +41,7 @@ class OneClassSVMDetector:
             "nu": nu,
             "max_iter": max_iter,
         }
-        self._model: Optional[OneClassSVM] = None
+        self._model: OneClassSVM | None = None
         self._scaler = StandardScaler()
         self._is_fitted = False
         logger.info(f"OneClassSVMDetector initialized: {self.params}")
@@ -86,8 +86,8 @@ class OneClassSVMDetector:
     def tune_hyperparameters(
         self,
         X: np.ndarray,
-        param_grid: Optional[Dict[str, List]] = None,
-    ) -> Dict[str, Any]:
+        param_grid: dict[str, list] | None = None,
+    ) -> dict[str, Any]:
         """Grid search for optimal SVM hyperparameters."""
         if param_grid is None:
             param_grid = {
@@ -128,5 +128,5 @@ class OneClassSVMDetector:
             raise RuntimeError("OneClassSVM must be fitted first")
 
     @property
-    def model(self) -> Optional[OneClassSVM]:
+    def model(self) -> OneClassSVM | None:
         return self._model

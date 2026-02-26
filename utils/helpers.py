@@ -8,12 +8,13 @@ Common functions used across modules:
 - Hashing utilities
 """
 
+import functools
 import hashlib
 import time
-import functools
-from datetime import datetime, timezone
+from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any
 
 from utils.logger import get_logger
 
@@ -42,7 +43,7 @@ def compute_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def ensure_directory(path: Union[str, Path]) -> Path:
+def ensure_directory(path: str | Path) -> Path:
     """Create directory if it doesn't exist and return the Path object."""
     dir_path = Path(path)
     dir_path.mkdir(parents=True, exist_ok=True)
@@ -51,13 +52,13 @@ def ensure_directory(path: Union[str, Path]) -> Path:
 
 def utc_now() -> datetime:
     """Get current UTC timestamp."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_timestamp(
     ts_string: str,
-    formats: Optional[List[str]] = None,
-) -> Optional[datetime]:
+    formats: list[str] | None = None,
+) -> datetime | None:
     """
     Parse a timestamp string trying multiple formats.
 
@@ -91,7 +92,7 @@ def parse_timestamp(
     return None
 
 
-def chunk_list(data: list, chunk_size: int) -> List[list]:
+def chunk_list(data: list, chunk_size: int) -> list[list]:
     """Split a list into chunks of specified size."""
     return [data[i : i + chunk_size] for i in range(0, len(data), chunk_size)]
 
@@ -103,11 +104,9 @@ def safe_divide(numerator: float, denominator: float, default: float = 0.0) -> f
     return numerator / denominator
 
 
-def flatten_dict(
-    d: Dict[str, Any], parent_key: str = "", sep: str = "."
-) -> Dict[str, Any]:
+def flatten_dict(d: dict[str, Any], parent_key: str = "", sep: str = ".") -> dict[str, Any]:
     """Flatten a nested dictionary into dot-notation keys."""
-    items: List[tuple] = []
+    items: list[tuple] = []
     for k, v in d.items():
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
         if isinstance(v, dict):

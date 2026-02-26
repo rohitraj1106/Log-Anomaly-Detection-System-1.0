@@ -12,27 +12,27 @@ Also provides:
 """
 
 import json
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 from scipy import stats as scipy_stats
 
+from utils.helpers import ensure_directory, safe_divide, timer
 from utils.logger import get_logger
-from utils.helpers import ensure_directory, timer, safe_divide
 
 logger = get_logger(__name__)
 
 # Avoid hard dependency on sklearn.metrics at import time
 try:
     from sklearn.metrics import (
-        precision_score,
-        recall_score,
-        f1_score,
-        roc_auc_score,
         classification_report,
         confusion_matrix,
+        f1_score,
+        precision_score,
+        recall_score,
+        roc_auc_score,
     )
+
     SKLEARN_METRICS_AVAILABLE = True
 except ImportError:
     SKLEARN_METRICS_AVAILABLE = False
@@ -55,9 +55,9 @@ class ModelEvaluator:
         self,
         y_true: np.ndarray,
         y_pred: np.ndarray,
-        y_scores: Optional[np.ndarray] = None,
+        y_scores: np.ndarray | None = None,
         model_name: str = "model",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Evaluate model with ground truth labels.
 
@@ -121,7 +121,8 @@ class ModelEvaluator:
 
         # Classification report
         metrics["classification_report"] = classification_report(
-            y_true_binary, y_pred_binary,
+            y_true_binary,
+            y_pred_binary,
             target_names=["Normal", "Anomaly"],
             output_dict=True,
             zero_division=0,
@@ -138,8 +139,8 @@ class ModelEvaluator:
         self,
         scores: np.ndarray,
         model_name: str = "model",
-        percentile_thresholds: Optional[List[float]] = None,
-    ) -> Dict[str, Any]:
+        percentile_thresholds: list[float] | None = None,
+    ) -> dict[str, Any]:
         """
         Evaluate model on unlabeled data (production scenario).
 
@@ -204,7 +205,7 @@ class ModelEvaluator:
         current_scores: np.ndarray,
         threshold: float = 0.05,
         method: str = "ks_test",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Detect data/model drift by comparing score distributions.
 
@@ -243,9 +244,7 @@ class ModelEvaluator:
 
         return result
 
-    def compare_models(
-        self, evaluations: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
+    def compare_models(self, evaluations: list[dict[str, Any]]) -> dict[str, Any]:
         """Compare multiple model evaluations."""
         comparison = {
             "models": [],
@@ -271,9 +270,7 @@ class ModelEvaluator:
         logger.info(f"Best model: {comparison['best_model']} (F1={comparison['best_f1']:.4f})")
         return comparison
 
-    def save_report(
-        self, metrics: Dict[str, Any], filename: str = "evaluation_report.json"
-    ) -> str:
+    def save_report(self, metrics: dict[str, Any], filename: str = "evaluation_report.json") -> str:
         """Save evaluation report to file."""
         path = self._output_dir / filename
         with open(path, "w") as f:
@@ -282,7 +279,7 @@ class ModelEvaluator:
         return str(path)
 
     @staticmethod
-    def _basic_evaluation(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, Any]:
+    def _basic_evaluation(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, Any]:
         """Fallback evaluation without sklearn."""
         y_true = np.array(y_true)
         y_pred = np.array(y_pred)

@@ -14,14 +14,14 @@ Isolation Forest is ideal for log anomaly detection because:
 4. Robust to irrelevant features
 """
 
-import numpy as np
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
+import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import ParameterGrid
 
-from utils.logger import get_logger
 from utils.helpers import timer
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -54,7 +54,7 @@ class IsolationForestDetector:
             "random_state": random_state,
             "n_jobs": n_jobs,
         }
-        self._model: Optional[IsolationForest] = None
+        self._model: IsolationForest | None = None
         self._threshold: float = 0.0
         self._is_fitted: bool = False
         logger.info(f"IsolationForestDetector initialized: {self.params}")
@@ -129,9 +129,9 @@ class IsolationForestDetector:
     def tune_hyperparameters(
         self,
         X: np.ndarray,
-        param_grid: Optional[Dict[str, List]] = None,
+        param_grid: dict[str, list] | None = None,
         scoring_percentile: float = 5.0,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Grid search for optimal hyperparameters.
 
@@ -153,11 +153,13 @@ class IsolationForestDetector:
                 "max_samples": [0.5, 0.75, 1.0],
             }
 
-        logger.info(f"Hyperparameter tuning with {len(list(ParameterGrid(param_grid)))} combinations")
+        logger.info(
+            f"Hyperparameter tuning with {len(list(ParameterGrid(param_grid)))} combinations"
+        )
 
         best_score = float("-inf")
-        best_params: Dict[str, Any] = {}
-        results: List[Dict[str, Any]] = []
+        best_params: dict[str, Any] = {}
+        results: list[dict[str, Any]] = []
 
         for params in ParameterGrid(param_grid):
             try:
@@ -210,7 +212,7 @@ class IsolationForestDetector:
             raise RuntimeError("Model must be fitted before prediction")
 
     @property
-    def model(self) -> Optional[IsolationForest]:
+    def model(self) -> IsolationForest | None:
         return self._model
 
     @property

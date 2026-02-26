@@ -4,8 +4,8 @@ Unit Tests — ML Models (Isolation Forest, One-Class SVM, Autoencoder).
 Tests model initialization, training, prediction, scoring, and serialization.
 """
 
-import pytest
 import numpy as np
+import pytest
 
 from models.isolation_forest import IsolationForestDetector
 from models.one_class_svm import OneClassSVMDetector

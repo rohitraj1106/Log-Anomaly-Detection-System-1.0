@@ -13,10 +13,10 @@ Usage:
     batch_size = config.get("pipeline.batch_size", default=1000)
 """
 
-import os
 import copy
+import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, ClassVar
 
 from utils.logger import get_logger
 
@@ -32,11 +32,11 @@ except ImportError:
 class ConfigLoader:
     """Singleton-pattern configuration loader with environment override support."""
 
-    _instances: Dict[str, "ConfigLoader"] = {}
+    _instances: ClassVar[dict[str, "ConfigLoader"]] = {}
 
     def __init__(self, config_path: str) -> None:
         self._config_path = Path(config_path)
-        self._config: Dict[str, Any] = {}
+        self._config: dict[str, Any] = {}
         self._load()
 
     @classmethod
@@ -56,16 +56,12 @@ class ConfigLoader:
     def _load(self) -> None:
         """Load configuration from YAML file."""
         if not self._config_path.exists():
-            raise FileNotFoundError(
-                f"Configuration file not found: {self._config_path}"
-            )
+            raise FileNotFoundError(f"Configuration file not found: {self._config_path}")
 
         if yaml is None:
-            raise ImportError(
-                "PyYAML is required. Install with: pip install pyyaml"
-            )
+            raise ImportError("PyYAML is required. Install with: pip install pyyaml")
 
-        with open(self._config_path, "r", encoding="utf-8") as f:
+        with open(self._config_path, encoding="utf-8") as f:
             self._config = yaml.safe_load(f) or {}
 
         # Apply environment variable overrides
@@ -80,7 +76,7 @@ class ConfigLoader:
         prefix = "LADP_"
         for key, value in os.environ.items():
             if key.startswith(prefix):
-                config_path = key[len(prefix):].lower().replace("__", ".")
+                config_path = key[len(prefix) :].lower().replace("__", ".")
                 self._set_nested(config_path, self._cast_value(value))
                 logger.debug(f"Config override from env: {config_path}")
 
@@ -106,7 +102,7 @@ class ConfigLoader:
                 return default
         return value
 
-    def get_section(self, section: str) -> Dict[str, Any]:
+    def get_section(self, section: str) -> dict[str, Any]:
         """Get an entire configuration section as a dictionary."""
         result = self.get(section, {})
         if isinstance(result, dict):
@@ -139,7 +135,7 @@ class ConfigLoader:
         return value
 
     @property
-    def raw(self) -> Dict[str, Any]:
+    def raw(self) -> dict[str, Any]:
         """Return a deep copy of the raw configuration dictionary."""
         return copy.deepcopy(self._config)
 

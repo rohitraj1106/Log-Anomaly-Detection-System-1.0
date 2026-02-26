@@ -12,13 +12,13 @@ In production, replace with:
 - PagerDuty / OpsGenie for alerting
 """
 
-import json
 import queue
 import random
 import threading
 import time
-from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Any
 
 from utils.logger import get_logger
 
@@ -36,8 +36,12 @@ class LogProducer:
     """
 
     SERVICES = [
-        "auth-service", "api-gateway", "payment-service",
-        "user-service", "notification-service", "search-service",
+        "auth-service",
+        "api-gateway",
+        "payment-service",
+        "user-service",
+        "notification-service",
+        "search-service",
     ]
 
     NORMAL_TEMPLATES = [
@@ -68,11 +72,10 @@ class LogProducer:
         self.rate_per_second = rate_per_second
         self.anomaly_rate = anomaly_rate
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._produced_count = 0
         logger.info(
-            f"LogProducer initialized: rate={rate_per_second}/s, "
-            f"anomaly_rate={anomaly_rate}"
+            f"LogProducer initialized: rate={rate_per_second}/s, anomaly_rate={anomaly_rate}"
         )
 
     def start(self) -> None:
@@ -104,7 +107,7 @@ class LogProducer:
             except Exception as e:
                 logger.error(f"Producer error: {e}")
 
-    def _generate_event(self) -> Dict[str, Any]:
+    def _generate_event(self) -> dict[str, Any]:
         """Generate a single log event."""
         is_anomaly = random.random() < self.anomaly_rate
         service = random.choice(self.SERVICES)
@@ -119,16 +122,20 @@ class LogProducer:
             service=service,
             pct=random.randint(50, 99),
             count=random.randint(10, 10000),
-            ip=f"{random.randint(1,255)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,255)}",
+            ip=f"{random.randint(1, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 255)}",
         )
 
-        level = random.choice(["ERROR", "CRITICAL", "WARNING"]) if is_anomaly else random.choice(["INFO", "DEBUG"])
+        level = (
+            random.choice(["ERROR", "CRITICAL", "WARNING"])
+            if is_anomaly
+            else random.choice(["INFO", "DEBUG"])
+        )
 
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": level,
             "service": service,
-            "source_ip": f"{random.randint(1,255)}.{random.randint(0,255)}.{random.randint(0,255)}.{random.randint(1,255)}",
+            "source_ip": f"{random.randint(1, 255)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 255)}",
             "message": message,
             "is_anomaly_injected": is_anomaly,
         }
@@ -150,7 +157,7 @@ class LogConsumer:
         self,
         input_queue: queue.Queue,
         alert_queue: queue.Queue,
-        scoring_fn: Optional[Callable] = None,
+        scoring_fn: Callable | None = None,
         batch_window_seconds: float = 5.0,
         batch_size: int = 100,
     ) -> None:
@@ -160,10 +167,10 @@ class LogConsumer:
         self.batch_window_seconds = batch_window_seconds
         self.batch_size = batch_size
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._consumed_count = 0
         self._anomaly_count = 0
-        self._batch_buffer: List[Dict[str, Any]] = []
+        self._batch_buffer: list[dict[str, Any]] = []
         logger.info("LogConsumer initialized")
 
     def start(self) -> None:
@@ -210,14 +217,14 @@ class LogConsumer:
             except Exception as e:
                 logger.error(f"Consumer error: {e}")
 
-    def _process_batch(self, batch: List[Dict[str, Any]]) -> None:
+    def _process_batch(self, batch: list[dict[str, Any]]) -> None:
         """Process and score a micro-batch of log events."""
         start = time.perf_counter()
 
         if self.scoring_fn:
             try:
                 scores = self.scoring_fn(batch)
-                for event, score in zip(batch, scores):
+                for event, score in zip(batch, scores, strict=False):
                     event["anomaly_score"] = float(score)
                     if score > 0.5:  # Anomaly threshold
                         event["is_anomaly_detected"] = True
@@ -239,7 +246,9 @@ class LogConsumer:
             for event in batch:
                 level = event.get("level", "INFO")
                 is_anomaly = level in ("ERROR", "CRITICAL") and random.random() < 0.3
-                event["anomaly_score"] = random.uniform(0.6, 0.95) if is_anomaly else random.uniform(0.01, 0.4)
+                event["anomaly_score"] = (
+                    random.uniform(0.6, 0.95) if is_anomaly else random.uniform(0.01, 0.4)
+                )
                 event["is_anomaly_detected"] = is_anomaly
                 if is_anomaly:
                     self._anomaly_count += 1
@@ -272,7 +281,7 @@ class StreamingPipeline:
         self,
         rate_per_second: float = 50.0,
         anomaly_rate: float = 0.05,
-        scoring_fn: Optional[Callable] = None,
+        scoring_fn: Callable | None = None,
     ) -> None:
         self.log_queue: queue.Queue = queue.Queue(maxsize=10000)
         self.alert_queue: queue.Queue = queue.Queue(maxsize=5000)
@@ -301,7 +310,7 @@ class StreamingPipeline:
         time.sleep(2)  # Let consumer drain
         self.consumer.stop()
 
-    def get_alerts(self, max_alerts: int = 100) -> List[Dict[str, Any]]:
+    def get_alerts(self, max_alerts: int = 100) -> list[dict[str, Any]]:
         """Drain the alert queue."""
         alerts = []
         while not self.alert_queue.empty() and len(alerts) < max_alerts:
@@ -311,7 +320,7 @@ class StreamingPipeline:
                 break
         return alerts
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get pipeline statistics."""
         return {
             "produced": self.producer.produced_count,
@@ -333,12 +342,15 @@ def run_streaming_demo(duration_seconds: int = 30) -> None:
             stats = pipeline.get_stats()
             alerts = pipeline.get_alerts(max_alerts=5)
 
-            print(f"\r⏱  t={i+1}s | "
-                  f"Produced: {stats['produced']} | "
-                  f"Consumed: {stats['consumed']} | "
-                  f"Anomalies: {stats['anomalies_detected']} | "
-                  f"Queue: {stats['queue_size']} | "
-                  f"Alerts: {len(alerts)}", end="")
+            print(
+                f"\r⏱  t={i + 1}s | "
+                f"Produced: {stats['produced']} | "
+                f"Consumed: {stats['consumed']} | "
+                f"Anomalies: {stats['anomalies_detected']} | "
+                f"Queue: {stats['queue_size']} | "
+                f"Alerts: {len(alerts)}",
+                end="",
+            )
 
             for alert in alerts[:2]:
                 print(f"\n  🚨 ALERT: [{alert.get('service')}] {alert.get('message', '')[:80]}")
@@ -348,7 +360,7 @@ def run_streaming_demo(duration_seconds: int = 30) -> None:
     finally:
         pipeline.stop()
         stats = pipeline.get_stats()
-        print(f"\n\n📊 Final Stats:")
+        print("\n\n📊 Final Stats:")
         print(f"   Produced: {stats['produced']}")
         print(f"   Consumed: {stats['consumed']}")
         print(f"   Anomalies: {stats['anomalies_detected']}")

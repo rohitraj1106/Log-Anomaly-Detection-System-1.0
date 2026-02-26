@@ -4,9 +4,9 @@ Unit Tests — Data Validation Pipeline.
 Tests schema enforcement, null ratio checks, and dead-letter quarantine.
 """
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 
 from pipelines.validation import DataValidator
 
@@ -23,13 +23,13 @@ class TestDataValidator:
         result = self.validator.validate(sample_log_df.copy())
         assert isinstance(result, tuple)
         assert len(result) == 3
-        valid_df, quarantined_df, report = result
+        valid_df, _, _ = result
         assert isinstance(valid_df, pd.DataFrame)
 
     @pytest.mark.unit
     def test_valid_data_passes(self, sample_log_df):
         """Well-formed data passes validation without quarantine."""
-        valid_df, quarantined_df, report = self.validator.validate(sample_log_df.copy())
+        valid_df, _, _ = self.validator.validate(sample_log_df.copy())
         assert len(valid_df) > 0
 
     @pytest.mark.unit
@@ -62,10 +62,19 @@ class TestDataValidator:
     @pytest.mark.unit
     def test_empty_dataframe_handled(self):
         """Empty DataFrame doesn't crash the validator."""
-        empty_df = pd.DataFrame(columns=[
-            "timestamp", "level", "service", "source_ip",
-            "message", "raw_log", "log_hash", "parse_method", "is_anomaly",
-        ])
+        empty_df = pd.DataFrame(
+            columns=[
+                "timestamp",
+                "level",
+                "service",
+                "source_ip",
+                "message",
+                "raw_log",
+                "log_hash",
+                "parse_method",
+                "is_anomaly",
+            ]
+        )
         result = self.validator.validate(empty_df)
         assert result is not None
 
@@ -74,6 +83,6 @@ class TestDataValidator:
         """Invalid log levels are corrected or flagged."""
         df = sample_log_df.copy()
         df.loc[0, "level"] = "INVALID_LEVEL"
-        valid_df, _, report = self.validator.validate(df)
+        valid_df, _, _ = self.validator.validate(df)
         # Should handle gracefully (correct or quarantine)
         assert isinstance(valid_df, pd.DataFrame)

@@ -11,12 +11,10 @@ Uses a simple dense autoencoder as cross-platform fallback.
 """
 
 import numpy as np
-from typing import Any, Dict, Optional, Tuple
-
 from sklearn.preprocessing import StandardScaler
 
-from utils.logger import get_logger
 from utils.helpers import timer
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -35,7 +33,7 @@ class AutoencoderDetector:
     def __init__(
         self,
         encoding_dim: int = 32,
-        hidden_layers: list = None,
+        hidden_layers: list | None = None,
         epochs: int = 50,
         batch_size: int = 256,
         learning_rate: float = 0.001,
@@ -54,7 +52,7 @@ class AutoencoderDetector:
         self._threshold: float = 0.0
         self._is_fitted = False
         self._input_dim: int = 0
-        self._training_history: Dict[str, list] = {"loss": []}
+        self._training_history: dict[str, list] = {"loss": []}
 
         logger.info(f"AutoencoderDetector initialized (encoding_dim={encoding_dim})")
 
@@ -72,7 +70,7 @@ class AutoencoderDetector:
         self._input_dim = X_scaled.shape[1]
 
         # Build encoder-decoder architecture
-        layer_dims = [self._input_dim] + self.hidden_layers + [self.encoding_dim]
+        layer_dims = [self._input_dim, *self.hidden_layers, self.encoding_dim]
         # Mirror for decoder
         decoder_dims = list(reversed(layer_dims))
 
@@ -126,8 +124,7 @@ class AutoencoderDetector:
         self._is_fitted = True
 
         logger.info(
-            f"Autoencoder trained. Threshold: {self._threshold:.6f} "
-            f"(p{self.threshold_percentile})"
+            f"Autoencoder trained. Threshold: {self._threshold:.6f} (p{self.threshold_percentile})"
         )
         return self
 
@@ -154,7 +151,7 @@ class AutoencoderDetector:
         """Forward pass through all layers."""
         activations = [X]
         current = X
-        for i, (W, b) in enumerate(zip(self._weights, self._biases)):
+        for i, (W, b) in enumerate(zip(self._weights, self._biases, strict=False)):
             z = current @ W + b
             # ReLU for hidden layers, linear for output
             if i < len(self._weights) - 1:
@@ -164,9 +161,7 @@ class AutoencoderDetector:
             activations.append(current)
         return activations
 
-    def _backward(
-        self, X: np.ndarray, activations: list, lr: float
-    ) -> None:
+    def _backward(self, X: np.ndarray, activations: list, lr: float) -> None:
         """Simplified backpropagation."""
         batch_size = X.shape[0]
         n_layers = len(self._weights)
@@ -201,7 +196,7 @@ class AutoencoderDetector:
             raise RuntimeError("Autoencoder must be fitted first")
 
     @property
-    def training_history(self) -> Dict[str, list]:
+    def training_history(self) -> dict[str, list]:
         return self._training_history
 
     @property

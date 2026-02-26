@@ -23,16 +23,14 @@ Features:
 
 import asyncio
 import os
+import pickle
 import sys
 import time
-import pickle
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
 
-import numpy as np
 import pandas as pd
 
 # Add project root to path
@@ -40,27 +38,25 @@ PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from fastapi import FastAPI, HTTPException, Request, Security, Depends
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.security import APIKeyHeader
 
 from api.schemas import (
-    LogEntry,
     BatchLogRequest,
-    LogPredictionResponse,
     BatchPredictionResponse,
     HealthResponse,
+    LogEntry,
+    LogPredictionResponse,
     ModelInfoResponse,
-    MetricsResponse,
     PredictionResult,
-    ErrorResponse,
 )
-from pipelines.ingestion import LogIngestionEngine
-from pipelines.preprocessing import LogPreprocessor
 from features.engineering import FeatureEngineer
 from models.trainer import ModelTrainer
 from monitoring.metrics import MetricsCollector
+from pipelines.ingestion import LogIngestionEngine
+from pipelines.preprocessing import LogPreprocessor
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -72,14 +68,15 @@ _executor = ThreadPoolExecutor(max_workers=4)
 # Application State
 # =============================================================================
 
+
 class AppState:
     """Global application state for model serving."""
 
     def __init__(self) -> None:
-        self.model_trainer: Optional[ModelTrainer] = None
-        self.feature_engineer: Optional[FeatureEngineer] = None
-        self.ingestion_engine: Optional[LogIngestionEngine] = None
-        self.preprocessor: Optional[LogPreprocessor] = None
+        self.model_trainer: ModelTrainer | None = None
+        self.feature_engineer: FeatureEngineer | None = None
+        self.ingestion_engine: LogIngestionEngine | None = None
+        self.preprocessor: LogPreprocessor | None = None
         self.metrics_collector: MetricsCollector = MetricsCollector()
         self.start_time: float = time.time()
         self.total_predictions: int = 0
@@ -98,6 +95,7 @@ state = AppState()
 # Load settings with graceful fallback
 try:
     from utils.settings import settings
+
     ALLOWED_ORIGINS = settings.allowed_origins_list
     API_KEY = settings.api_key
     RATE_LIMIT = settings.rate_limit
@@ -133,8 +131,8 @@ app.add_middleware(
 # Rate limiting (graceful fallback if slowapi not installed)
 try:
     from slowapi import Limiter
-    from slowapi.util import get_remote_address
     from slowapi.errors import RateLimitExceeded
+    from slowapi.util import get_remote_address
 
     limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT])
     app.state.limiter = limiter
@@ -157,7 +155,7 @@ except ImportError:
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 
-async def verify_api_key(api_key: Optional[str] = Security(api_key_header)) -> Optional[str]:
+async def verify_api_key(api_key: str | None = Security(api_key_header)) -> str | None:
     """Verify API key if configured. Passes through if no key is set."""
     if not API_KEY:
         return None  # No auth required
@@ -197,6 +195,7 @@ def mask_pii(text: str) -> str:
 # =============================================================================
 # Startup / Shutdown Events
 # =============================================================================
+
 
 @app.on_event("startup")
 async def startup_event() -> None:
@@ -241,6 +240,7 @@ async def shutdown_event() -> None:
 # Middleware
 # =============================================================================
 
+
 @app.middleware("http")
 async def add_request_context(request: Request, call_next):
     """Add request ID for distributed tracing and log all requests."""
@@ -267,6 +267,7 @@ async def add_request_context(request: Request, call_next):
 # Exception Handlers
 # =============================================================================
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Global exception handler."""
@@ -284,10 +285,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Helper Functions
 # =============================================================================
 
+
 def _process_log_entry(entry: LogEntry) -> pd.DataFrame:
     """Convert a log entry to a preprocessed DataFrame."""
     log_dict = {
-        "timestamp": entry.timestamp or datetime.now(timezone.utc).isoformat(),
+        "timestamp": entry.timestamp or datetime.now(UTC).isoformat(),
         "level": entry.level or "INFO",
         "service": entry.service or "unknown",
         "source_ip": entry.source_ip or "",
@@ -327,10 +329,11 @@ async def _predict_dataframe(df: pd.DataFrame) -> tuple:
 # Endpoints
 # =============================================================================
 
+
 @app.post("/predict-log", response_model=LogPredictionResponse)
 async def predict_single_log(
     entry: LogEntry,
-    _api_key: Optional[str] = Depends(verify_api_key),
+    _api_key: str | None = Depends(verify_api_key),
 ) -> LogPredictionResponse:
     """
     Predict whether a single log entry is anomalous.
@@ -382,7 +385,7 @@ async def predict_single_log(
 @app.post("/predict-batch", response_model=BatchPredictionResponse)
 async def predict_batch(
     request: BatchLogRequest,
-    _api_key: Optional[str] = Depends(verify_api_key),
+    _api_key: str | None = Depends(verify_api_key),
 ) -> BatchPredictionResponse:
     """
     Predict anomalies for a batch of log entries.
@@ -407,12 +410,14 @@ async def predict_batch(
             if is_anomaly:
                 total_anomalies += 1
 
-            predictions.append(PredictionResult(
-                is_anomaly=is_anomaly,
-                anomaly_score=score,
-                anomaly_label=label,
-                confidence=abs(score - 0.5) * 2,
-            ))
+            predictions.append(
+                PredictionResult(
+                    is_anomaly=is_anomaly,
+                    anomaly_score=score,
+                    anomaly_label=label,
+                    confidence=abs(score - 0.5) * 2,
+                )
+            )
 
         inference_time = (time.perf_counter() - start) * 1000
         state.total_predictions += len(labels)
@@ -449,9 +454,7 @@ async def health_check() -> HealthResponse:
     return HealthResponse(
         status="healthy" if state.model_loaded else "degraded",
         model_loaded=state.model_loaded,
-        model_version=(
-            state.model_trainer.version if state.model_trainer else None
-        ),
+        model_version=(state.model_trainer.version if state.model_trainer else None),
         uptime_seconds=round(time.time() - state.start_time, 1),
         total_predictions=state.total_predictions,
     )
@@ -459,7 +462,7 @@ async def health_check() -> HealthResponse:
 
 @app.get("/model-info", response_model=ModelInfoResponse)
 async def get_model_info(
-    _api_key: Optional[str] = Depends(verify_api_key),
+    _api_key: str | None = Depends(verify_api_key),
 ) -> ModelInfoResponse:
     """Get metadata about the currently loaded model."""
     if not state.model_loaded or not state.model_trainer:
@@ -487,16 +490,18 @@ async def get_metrics(request: Request) -> PlainTextResponse:
     prometheus_text = state.metrics_collector.get_prometheus_metrics()
 
     # Also inject API-level counters
-    extra = "\n".join([
-        "",
-        "# HELP ladp_api_uptime_seconds API uptime in seconds",
-        "# TYPE ladp_api_uptime_seconds gauge",
-        f"ladp_api_uptime_seconds {time.time() - state.start_time:.1f}",
-        "",
-        "# HELP ladp_model_loaded Whether the model is loaded (1=yes, 0=no)",
-        "# TYPE ladp_model_loaded gauge",
-        f"ladp_model_loaded {1 if state.model_loaded else 0}",
-    ])
+    extra = "\n".join(
+        [
+            "",
+            "# HELP ladp_api_uptime_seconds API uptime in seconds",
+            "# TYPE ladp_api_uptime_seconds gauge",
+            f"ladp_api_uptime_seconds {time.time() - state.start_time:.1f}",
+            "",
+            "# HELP ladp_model_loaded Whether the model is loaded (1=yes, 0=no)",
+            "# TYPE ladp_model_loaded gauge",
+            f"ladp_model_loaded {1 if state.model_loaded else 0}",
+        ]
+    )
 
     return PlainTextResponse(
         content=prometheus_text + extra,

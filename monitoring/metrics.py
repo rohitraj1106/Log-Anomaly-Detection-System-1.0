@@ -17,17 +17,16 @@ In production, integrate with:
 """
 
 import json
-import time
 import threading
+import time
 from collections import deque
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Deque, Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 
-from utils.logger import get_logger
 from utils.helpers import ensure_directory, safe_divide
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -54,10 +53,10 @@ class MetricsCollector:
         self._export_dir = ensure_directory(export_dir)
 
         # Rolling windows
-        self._prediction_times: Deque[float] = deque(maxlen=window_size)
-        self._latencies: Deque[float] = deque(maxlen=window_size)
-        self._anomaly_flags: Deque[bool] = deque(maxlen=window_size)
-        self._scores: Deque[float] = deque(maxlen=window_size)
+        self._prediction_times: deque[float] = deque(maxlen=window_size)
+        self._latencies: deque[float] = deque(maxlen=window_size)
+        self._anomaly_flags: deque[bool] = deque(maxlen=window_size)
+        self._scores: deque[float] = deque(maxlen=window_size)
 
         # Counters
         self._total_predictions: int = 0
@@ -66,11 +65,11 @@ class MetricsCollector:
         self._start_time: float = time.time()
 
         # Drift tracking
-        self._reference_scores: Optional[np.ndarray] = None
-        self._drift_alerts: List[Dict[str, Any]] = []
+        self._reference_scores: np.ndarray | None = None
+        self._drift_alerts: list[dict[str, Any]] = []
 
         # Alert history
-        self._alerts: List[Dict[str, Any]] = []
+        self._alerts: list[dict[str, Any]] = []
 
         logger.info("MetricsCollector initialized")
 
@@ -97,7 +96,7 @@ class MetricsCollector:
         with self._lock:
             self._total_errors += 1
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Get current monitoring metrics snapshot."""
         with self._lock:
             latencies = list(self._latencies)
@@ -105,7 +104,7 @@ class MetricsCollector:
             scores = list(self._scores)
 
         metrics = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "uptime_seconds": round(time.time() - self._start_time, 1),
             "predictions": {
                 "total": self._total_predictions,
@@ -115,12 +114,10 @@ class MetricsCollector:
             "anomalies": {
                 "total": self._total_anomalies,
                 "window_count": sum(anomaly_flags) if anomaly_flags else 0,
-                "window_rate": safe_divide(
-                    sum(anomaly_flags), len(anomaly_flags)
-                ) if anomaly_flags else 0.0,
-                "overall_rate": safe_divide(
-                    self._total_anomalies, self._total_predictions
-                ),
+                "window_rate": safe_divide(sum(anomaly_flags), len(anomaly_flags))
+                if anomaly_flags
+                else 0.0,
+                "overall_rate": safe_divide(self._total_anomalies, self._total_predictions),
             },
             "latency": self._compute_latency_stats(latencies),
             "scores": self._compute_score_stats(scores),
@@ -144,7 +141,7 @@ class MetricsCollector:
         anomaly_rate_critical: float = 0.25,
         latency_p99_threshold_ms: float = 500.0,
         error_rate_threshold: float = 0.05,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Check current metrics against alert thresholds."""
         alerts = []
         metrics = self.get_metrics()
@@ -155,7 +152,7 @@ class MetricsCollector:
                 "severity": "CRITICAL",
                 "type": "anomaly_rate",
                 "message": f"Anomaly rate {anomaly_rate:.1%} exceeds critical threshold {anomaly_rate_critical:.1%}",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "value": anomaly_rate,
             }
             alerts.append(alert)
@@ -165,7 +162,7 @@ class MetricsCollector:
                 "severity": "WARNING",
                 "type": "anomaly_rate",
                 "message": f"Anomaly rate {anomaly_rate:.1%} exceeds warning threshold {anomaly_rate_warning:.1%}",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "value": anomaly_rate,
             }
             alerts.append(alert)
@@ -177,7 +174,7 @@ class MetricsCollector:
                 "severity": "WARNING",
                 "type": "latency",
                 "message": f"P99 latency {p99_lat:.0f}ms exceeds threshold {latency_p99_threshold_ms:.0f}ms",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "value": p99_lat,
             }
             alerts.append(alert)
@@ -189,7 +186,7 @@ class MetricsCollector:
                 "severity": "CRITICAL",
                 "type": "error_rate",
                 "message": f"Error rate {error_rate:.1%} exceeds threshold {error_rate_threshold:.1%}",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "value": error_rate,
             }
             alerts.append(alert)
@@ -202,7 +199,7 @@ class MetricsCollector:
         self._reference_scores = scores
         logger.info(f"Reference scores set: {len(scores)} samples")
 
-    def check_drift(self, threshold: float = 0.05) -> Optional[Dict[str, Any]]:
+    def check_drift(self, threshold: float = 0.05) -> dict[str, Any] | None:
         """Check for data drift against reference distribution."""
         if self._reference_scores is None:
             return None
@@ -213,9 +210,8 @@ class MetricsCollector:
 
         try:
             from scipy import stats as scipy_stats
-            statistic, p_value = scipy_stats.ks_2samp(
-                self._reference_scores, current_scores
-            )
+
+            statistic, p_value = scipy_stats.ks_2samp(self._reference_scores, current_scores)
 
             drift_detected = p_value < threshold
             result = {
@@ -223,7 +219,7 @@ class MetricsCollector:
                 "statistic": float(statistic),
                 "p_value": float(p_value),
                 "threshold": threshold,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
             if drift_detected:
@@ -234,7 +230,7 @@ class MetricsCollector:
         except ImportError:
             return None
 
-    def export_metrics(self, filename: Optional[str] = None) -> str:
+    def export_metrics(self, filename: str | None = None) -> str:
         """Export current metrics to JSON file."""
         if filename is None:
             filename = f"metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -284,7 +280,7 @@ class MetricsCollector:
         return len(recent) / 60.0 if recent else 0.0
 
     @staticmethod
-    def _compute_latency_stats(latencies: list) -> Dict[str, float]:
+    def _compute_latency_stats(latencies: list) -> dict[str, float]:
         """Compute latency percentile statistics."""
         if not latencies:
             return {"mean": 0, "p50": 0, "p90": 0, "p95": 0, "p99": 0, "max": 0}
@@ -300,7 +296,7 @@ class MetricsCollector:
         }
 
     @staticmethod
-    def _compute_score_stats(scores: list) -> Dict[str, float]:
+    def _compute_score_stats(scores: list) -> dict[str, float]:
         """Compute anomaly score statistics."""
         if not scores:
             return {"mean": 0, "std": 0, "min": 0, "max": 0}
@@ -313,5 +309,5 @@ class MetricsCollector:
         }
 
     @property
-    def alert_history(self) -> List[Dict[str, Any]]:
+    def alert_history(self) -> list[dict[str, Any]]:
         return list(self._alerts)

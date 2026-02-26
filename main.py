@@ -27,9 +27,8 @@ import json
 import os
 import pickle
 import sys
-import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -41,18 +40,18 @@ if PROJECT_ROOT not in sys.path:
 
 import mlflow
 import mlflow.sklearn
-from utils.settings import settings
-from utils.logger import get_logger
-from utils.helpers import ensure_directory, timer
-from pipelines.ingestion import LogIngestionEngine
-from pipelines.validation import DataValidator
-from pipelines.preprocessing import LogPreprocessor
-from pipelines.orchestrator import PipelineOrchestrator
+
 from features.engineering import FeatureEngineer
 from features.store import FeatureStore
-from models.trainer import ModelTrainer
 from models.evaluator import ModelEvaluator
-from monitoring.metrics import MetricsCollector
+from models.trainer import ModelTrainer
+from pipelines.ingestion import LogIngestionEngine
+from pipelines.orchestrator import PipelineOrchestrator
+from pipelines.preprocessing import LogPreprocessor
+from pipelines.validation import DataValidator
+from utils.helpers import ensure_directory, timer
+from utils.logger import get_logger
+from utils.settings import settings
 
 logger = get_logger(__name__)
 
@@ -70,7 +69,8 @@ CONFIG_API = "configs/api_config.yaml"
 # Pipeline Step Functions
 # =============================================================================
 
-def step_generate_data(context: Dict[str, Any]) -> Dict[str, Any]:
+
+def step_generate_data(context: dict[str, Any]) -> dict[str, Any]:
     """Generate synthetic log data for training."""
     from data.generate_logs import generate_logs
 
@@ -86,7 +86,7 @@ def step_generate_data(context: Dict[str, Any]) -> Dict[str, Any]:
     return {"log_file": log_file, "num_logs": num_logs}
 
 
-def step_ingest(context: Dict[str, Any]) -> pd.DataFrame:
+def step_ingest(context: dict[str, Any]) -> pd.DataFrame:
     """Ingest raw log data."""
     engine = LogIngestionEngine(config_path=CONFIG_PIPELINE)
 
@@ -102,15 +102,14 @@ def step_ingest(context: Dict[str, Any]) -> pd.DataFrame:
         logger.info(f"Ingested {len(df)} records from log file")
     else:
         raise FileNotFoundError(
-            f"No log files found in {DATA_RAW_DIR}. "
-            "Run with --mode generate first."
+            f"No log files found in {DATA_RAW_DIR}. Run with --mode generate first."
         )
 
     context["raw_df"] = df
     return df
 
 
-def step_validate(context: Dict[str, Any]) -> pd.DataFrame:
+def step_validate(context: dict[str, Any]) -> pd.DataFrame:
     """Validate ingested data."""
     df = context.get("ingest_output")
     if df is None:
@@ -134,7 +133,7 @@ def step_validate(context: Dict[str, Any]) -> pd.DataFrame:
     return valid_df
 
 
-def step_preprocess(context: Dict[str, Any]) -> pd.DataFrame:
+def step_preprocess(context: dict[str, Any]) -> pd.DataFrame:
     """Preprocess validated data."""
     df = context.get("validate_output")
     if df is None:
@@ -154,7 +153,7 @@ def step_preprocess(context: Dict[str, Any]) -> pd.DataFrame:
     return processed_df
 
 
-def step_feature_engineering(context: Dict[str, Any]) -> np.ndarray:
+def step_feature_engineering(context: dict[str, Any]) -> np.ndarray:
     """Extract features from preprocessed data."""
     df = context.get("preprocess_output")
     if df is None:
@@ -183,7 +182,7 @@ def step_feature_engineering(context: Dict[str, Any]) -> np.ndarray:
     return feature_matrix
 
 
-def step_train(context: Dict[str, Any]) -> Dict[str, Any]:
+def step_train(context: dict[str, Any]) -> dict[str, Any]:
     """Train the anomaly detection model."""
     X = context.get("feature_engineering_output")
     if X is None:
@@ -216,7 +215,7 @@ def step_train(context: Dict[str, Any]) -> Dict[str, Any]:
     return training_result
 
 
-def step_evaluate(context: Dict[str, Any]) -> Dict[str, Any]:
+def step_evaluate(context: dict[str, Any]) -> dict[str, Any]:
     """Evaluate the trained model."""
     trainer = context.get("model_trainer")
     X = context.get("feature_matrix")
@@ -261,7 +260,7 @@ def step_evaluate(context: Dict[str, Any]) -> Dict[str, Any]:
     return results
 
 
-def step_experiment_tracking(context: Dict[str, Any]) -> Dict[str, Any]:
+def step_experiment_tracking(context: dict[str, Any]) -> dict[str, Any]:
     """Log the experiment run using MLflow."""
     logger.info("📡 Logging experiment to MLflow...")
 
@@ -274,7 +273,9 @@ def step_experiment_tracking(context: Dict[str, Any]) -> Dict[str, Any]:
     trainer = context.get("model_trainer")
     engineer = context.get("feature_engineer")
 
-    run_name = f"{training_result.get('model_name', 'model')}_{training_result.get('version', 'v0')}"
+    run_name = (
+        f"{training_result.get('model_name', 'model')}_{training_result.get('version', 'v0')}"
+    )
 
     with mlflow.start_run(run_name=run_name) as run:
         # Log parameters
@@ -288,12 +289,14 @@ def step_experiment_tracking(context: Dict[str, Any]) -> Dict[str, Any]:
         # Log metrics
         labeled = eval_results.get("labeled", {})
         if labeled:
-            mlflow.log_metrics({
-                "precision": labeled.get("precision", 0),
-                "recall": labeled.get("recall", 0),
-                "f1_score": labeled.get("f1_score", 0),
-                "roc_auc": labeled.get("roc_auc", 0) if labeled.get("roc_auc") != "N/A" else 0,
-            })
+            mlflow.log_metrics(
+                {
+                    "precision": labeled.get("precision", 0),
+                    "recall": labeled.get("recall", 0),
+                    "f1_score": labeled.get("f1_score", 0),
+                    "roc_auc": labeled.get("roc_auc", 0) if labeled.get("roc_auc") != "N/A" else 0,
+                }
+            )
 
         # Log Unlabeled metrics
         unlabeled = eval_results.get("unlabeled", {})
@@ -304,7 +307,7 @@ def step_experiment_tracking(context: Dict[str, Any]) -> Dict[str, Any]:
         if trainer and trainer.model:
             logger.info("📦 Registering model in MLflow registry...")
             mlflow.sklearn.log_model(
-                sk_model=trainer.model.model, # The actual sklearn model is inside the detector class
+                sk_model=trainer.model.model,  # The actual sklearn model is inside the detector class
                 artifact_path="model",
                 registered_model_name=f"log_anomaly_{training_result.get('model_name')}",
             )
@@ -324,12 +327,13 @@ def step_experiment_tracking(context: Dict[str, Any]) -> Dict[str, Any]:
 # Pipeline Runners
 # =============================================================================
 
+
 @timer
 def run_full_pipeline(
     num_logs: int = 50000,
     anomaly_ratio: float = 0.05,
     tune_hyperparams: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run the complete end-to-end ML pipeline.
 
@@ -343,41 +347,49 @@ def run_full_pipeline(
 
     # Build DAG
     orchestrator.add_task(
-        "generate", step_generate_data,
+        "generate",
+        step_generate_data,
         description="Generate synthetic log data",
     )
     orchestrator.add_task(
-        "ingest", step_ingest,
+        "ingest",
+        step_ingest,
         depends_on=["generate"],
         description="Ingest raw log files",
     )
     orchestrator.add_task(
-        "validate", step_validate,
+        "validate",
+        step_validate,
         depends_on=["ingest"],
         description="Validate data quality",
     )
     orchestrator.add_task(
-        "preprocess", step_preprocess,
+        "preprocess",
+        step_preprocess,
         depends_on=["validate"],
         description="Clean and preprocess logs",
     )
     orchestrator.add_task(
-        "feature_engineering", step_feature_engineering,
+        "feature_engineering",
+        step_feature_engineering,
         depends_on=["preprocess"],
         description="Extract ML features",
     )
     orchestrator.add_task(
-        "train", step_train,
+        "train",
+        step_train,
         depends_on=["feature_engineering"],
         description="Train anomaly detection model",
     )
     orchestrator.add_task(
-        "evaluate", step_evaluate,
+        "evaluate",
+        step_evaluate,
         depends_on=["train"],
         description="Evaluate model performance",
     )
     orchestrator.add_task(
-        "experiment_tracking", step_experiment_tracking,
+        "experiment_tracking",
+        step_experiment_tracking,
         depends_on=["evaluate"],
         description="Log experiment results",
     )
@@ -388,7 +400,7 @@ def run_full_pipeline(
         "anomaly_ratio": anomaly_ratio,
         "tune_hyperparams": tune_hyperparams,
     }
-    results = orchestrator.run(context=context)
+    orchestrator.run(context=context)
 
     # Print summary
     summary = orchestrator.get_summary()
@@ -397,7 +409,9 @@ def run_full_pipeline(
     print("=" * 80)
     for task_name, task_info in summary["tasks"].items():
         status_icon = "✅" if task_info["status"] == "success" else "❌"
-        print(f"  {status_icon} {task_name:30s} — {task_info['status']:10s} ({task_info['duration_ms']:.0f}ms)")
+        print(
+            f"  {status_icon} {task_name:30s} — {task_info['status']:10s} ({task_info['duration_ms']:.0f}ms)"
+        )
 
     # Print evaluation results
     eval_results = context.get("evaluation_results", {})
@@ -410,8 +424,10 @@ def run_full_pipeline(
         print(f"  Recall:     {labeled.get('recall', 0):.4f}")
         print(f"  F1 Score:   {labeled.get('f1_score', 0):.4f}")
         print(f"  ROC-AUC:    {labeled.get('roc_auc', 'N/A')}")
-        print(f"  Anomalies:  {labeled.get('predicted_anomalies', 0)} detected "
-              f"/ {labeled.get('true_anomalies', 0)} actual")
+        print(
+            f"  Anomalies:  {labeled.get('predicted_anomalies', 0)} detected "
+            f"/ {labeled.get('true_anomalies', 0)} actual"
+        )
 
     print("\n" + "=" * 80)
     print("  ✅ Pipeline completed successfully!")
@@ -445,6 +461,7 @@ def run_api_server() -> None:
 def run_streaming_demo() -> None:
     """Run the real-time streaming anomaly detection demo."""
     from streaming.processor import run_streaming_demo
+
     print("\n⚡ Starting Streaming Anomaly Detection Demo...")
     print("   Press Ctrl+C to stop.\n")
     run_streaming_demo(duration_seconds=60)
@@ -453,11 +470,21 @@ def run_streaming_demo() -> None:
 def run_dashboard() -> None:
     """Start the Streamlit visualization dashboard."""
     import subprocess
+
     print("\n📊 Starting Streamlit Dashboard...")
     print("   📍 Dashboard: http://localhost:8501\n")
     subprocess.run(
-        [sys.executable, "-m", "streamlit", "run", "dashboard/app.py",
-         "--server.port", "8501", "--server.headless", "true"],
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            "dashboard/app.py",
+            "--server.port",
+            "8501",
+            "--server.headless",
+            "true",
+        ],
         cwd=PROJECT_ROOT,
     )
 
@@ -465,6 +492,7 @@ def run_dashboard() -> None:
 def run_generate_only(num_logs: int = 50000) -> None:
     """Generate sample data only."""
     from data.generate_logs import generate_logs
+
     print(f"\n📝 Generating {num_logs} synthetic log entries...")
     generate_logs(num_logs=num_logs, anomaly_ratio=0.05)
     print("✅ Data generation complete!\n")
@@ -473,6 +501,7 @@ def run_generate_only(num_logs: int = 50000) -> None:
 # =============================================================================
 # CLI Entry Point
 # =============================================================================
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -491,20 +520,27 @@ Examples:
         """,
     )
     parser.add_argument(
-        "--mode", type=str, default="train",
+        "--mode",
+        type=str,
+        default="train",
         choices=["train", "api", "stream", "dashboard", "generate"],
         help="Pipeline mode to run (default: train)",
     )
     parser.add_argument(
-        "--logs", type=int, default=50000,
+        "--logs",
+        type=int,
+        default=50000,
         help="Number of log entries to generate (default: 50000)",
     )
     parser.add_argument(
-        "--anomaly-ratio", type=float, default=0.05,
+        "--anomaly-ratio",
+        type=float,
+        default=0.05,
         help="Fraction of anomalous logs (default: 0.05)",
     )
     parser.add_argument(
-        "--no-tune", action="store_true",
+        "--no-tune",
+        action="store_true",
         help="Skip hyperparameter tuning",
     )
 

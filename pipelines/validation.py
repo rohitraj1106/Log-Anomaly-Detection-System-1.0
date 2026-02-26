@@ -13,14 +13,13 @@ Design: Each validator is a composable function that returns
 (valid_df, invalid_df, report) — enabling dead-letter queue patterns.
 """
 
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import pandas as pd
 
-from utils.logger import get_logger
 from utils.config_loader import ConfigLoader
 from utils.helpers import timer
+from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -32,28 +31,26 @@ class ValidationReport:
         self.total_records: int = 0
         self.valid_records: int = 0
         self.invalid_records: int = 0
-        self.checks: List[Dict[str, Any]] = []
+        self.checks: list[dict[str, Any]] = []
 
-    def add_check(
-        self, name: str, passed: int, failed: int, details: str = ""
-    ) -> None:
-        self.checks.append({
-            "check": name,
-            "passed": passed,
-            "failed": failed,
-            "pass_rate": passed / (passed + failed) if (passed + failed) > 0 else 1.0,
-            "details": details,
-        })
+    def add_check(self, name: str, passed: int, failed: int, details: str = "") -> None:
+        self.checks.append(
+            {
+                "check": name,
+                "passed": passed,
+                "failed": failed,
+                "pass_rate": passed / (passed + failed) if (passed + failed) > 0 else 1.0,
+                "details": details,
+            }
+        )
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         return {
             "total_records": self.total_records,
             "valid_records": self.valid_records,
             "invalid_records": self.invalid_records,
             "overall_quality": (
-                self.valid_records / self.total_records
-                if self.total_records > 0
-                else 1.0
+                self.valid_records / self.total_records if self.total_records > 0 else 1.0
             ),
             "checks": self.checks,
         }
@@ -84,7 +81,7 @@ class DataValidator:
         logger.info("DataValidator initialized")
 
     @timer
-    def validate(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, ValidationReport]:
+    def validate(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, ValidationReport]:
         """
         Run all validation checks on the DataFrame.
 
@@ -138,7 +135,7 @@ class DataValidator:
         df: pd.DataFrame,
         mask: pd.Series,
         report: ValidationReport,
-    ) -> Tuple[pd.Series, ValidationReport]:
+    ) -> tuple[pd.Series, ValidationReport]:
         """Verify required columns exist."""
         missing_cols = [c for c in self.REQUIRED_COLUMNS if c not in df.columns]
         if missing_cols:
@@ -159,7 +156,7 @@ class DataValidator:
         df: pd.DataFrame,
         mask: pd.Series,
         report: ValidationReport,
-    ) -> Tuple[pd.Series, ValidationReport]:
+    ) -> tuple[pd.Series, ValidationReport]:
         """Check null ratios for critical fields."""
         null_mask = pd.Series(True, index=df.index)
         for col in ["timestamp", "message"]:
@@ -181,7 +178,7 @@ class DataValidator:
         df: pd.DataFrame,
         mask: pd.Series,
         report: ValidationReport,
-    ) -> Tuple[pd.Series, ValidationReport]:
+    ) -> tuple[pd.Series, ValidationReport]:
         """Validate log levels against known set."""
         if "level" not in df.columns:
             return mask, report
@@ -204,7 +201,7 @@ class DataValidator:
         df: pd.DataFrame,
         mask: pd.Series,
         report: ValidationReport,
-    ) -> Tuple[pd.Series, ValidationReport]:
+    ) -> tuple[pd.Series, ValidationReport]:
         """Validate timestamp format and range."""
         if "timestamp" not in df.columns:
             return mask, report
@@ -218,9 +215,7 @@ class DataValidator:
                     continue
                 # Try parsing
                 parsed = pd.to_datetime(ts_str, errors="coerce")
-                if pd.isna(parsed):
-                    ts_valid.at[idx] = False
-                elif hasattr(parsed, "year") and parsed.year < self._min_year:
+                if pd.isna(parsed) or (hasattr(parsed, "year") and parsed.year < self._min_year):
                     ts_valid.at[idx] = False
             except Exception:
                 ts_valid.at[idx] = False
@@ -239,7 +234,7 @@ class DataValidator:
         df: pd.DataFrame,
         mask: pd.Series,
         report: ValidationReport,
-    ) -> Tuple[pd.Series, ValidationReport]:
+    ) -> tuple[pd.Series, ValidationReport]:
         """Check message length doesn't exceed limit."""
         if "message" not in df.columns:
             return mask, report

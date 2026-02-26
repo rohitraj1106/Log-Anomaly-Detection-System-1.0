@@ -4,8 +4,8 @@ Unit Tests — Log Ingestion Engine.
 Tests parsing, format handling, IP/timestamp extraction, and error resilience.
 """
 
-import pytest
 import pandas as pd
+import pytest
 
 from pipelines.ingestion import LogIngestionEngine
 

@@ -5,12 +5,10 @@ Generates realistic distributed system logs for testing and demonstration.
 Simulates logs from multiple services with configurable anomaly injection.
 """
 
-import random
 import json
-import os
+import random
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
 
 # Services and their typical log patterns
 SERVICES = [
@@ -123,13 +121,23 @@ ANOMALOUS_MESSAGES = {
 }
 
 IPS = [
-    "192.168.1.100", "10.0.0.50", "172.16.0.25", "10.10.5.12",
-    "192.168.10.200", "10.0.1.15", "172.20.0.88", "10.50.2.33",
+    "192.168.1.100",
+    "10.0.0.50",
+    "172.16.0.25",
+    "10.10.5.12",
+    "192.168.10.200",
+    "10.0.1.15",
+    "172.20.0.88",
+    "10.50.2.33",
 ]
 
 SUSPICIOUS_IPS = [
-    "45.33.32.156", "185.220.101.34", "91.219.236.13",
-    "23.129.64.210", "198.51.100.42", "203.0.113.99",
+    "45.33.32.156",
+    "185.220.101.34",
+    "91.219.236.13",
+    "23.129.64.210",
+    "198.51.100.42",
+    "203.0.113.99",
 ]
 
 
@@ -152,7 +160,9 @@ def _fill_template(template: str) -> str:
         "{device}": f"device_{random.randint(1000, 9999)}",
         "{count}": str(random.randint(10, 10000)),
         "{endpoint}": f"https://hooks.example.com/{random.randint(100, 999)}",
-        "{query}": random.choice(["machine learning", "kubernetes error", "payment failed", "user login"]),
+        "{query}": random.choice(
+            ["machine learning", "kubernetes error", "payment failed", "user login"]
+        ),
         "{hash}": f"{random.randint(100000, 999999):x}",
         "{prefix}": random.choice(["mac", "kub", "pay", "err"]),
         "{ip}": random.choice(SUSPICIOUS_IPS),
@@ -167,7 +177,7 @@ def _fill_template(template: str) -> str:
 def generate_logs(
     num_logs: int = 50000,
     anomaly_ratio: float = 0.05,
-    start_time: Optional[datetime] = None,
+    start_time: datetime | None = None,
     output_dir: str = "data/raw",
 ) -> str:
     """
@@ -188,8 +198,8 @@ def generate_logs(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    log_lines: List[str] = []
-    csv_rows: List[str] = []
+    log_lines: list[str] = []
+    csv_rows: list[str] = []
     csv_rows.append("timestamp,level,service,source_ip,message,is_anomaly")
 
     current_time = start_time
@@ -224,9 +234,7 @@ def generate_logs(
 
         # CSV row
         csv_message = message.replace('"', '""')
-        csv_rows.append(
-            f'{timestamp_str},{level},{service},{ip},"{csv_message}",{int(is_anomaly)}'
-        )
+        csv_rows.append(f'{timestamp_str},{level},{service},{ip},"{csv_message}",{int(is_anomaly)}')
 
         current_time += time_step
 
@@ -246,9 +254,13 @@ def generate_logs(
         for i in range(min(5000, num_logs)):
             entry = {
                 "timestamp": (start_time + time_step * i).isoformat(),
-                "level": log_lines[i].split("] ")[0].split("[")[-1] if "[" in log_lines[i] else "INFO",
+                "level": log_lines[i].split("] ")[0].split("[")[-1]
+                if "[" in log_lines[i]
+                else "INFO",
                 "service": random.choice(SERVICES),
-                "message": log_lines[i].split(": ", 1)[-1] if ": " in log_lines[i] else log_lines[i],
+                "message": log_lines[i].split(": ", 1)[-1]
+                if ": " in log_lines[i]
+                else log_lines[i],
                 "source_ip": random.choice(IPS + SUSPICIOUS_IPS),
                 "is_anomaly": i in anomaly_indices,
             }
